@@ -68,7 +68,7 @@ def grounded_scene_proposal(base,proposal,details):
     Confidence alone never proves a visible identity. Unknown coordinates remain
     unresolved and no default center/face is invented to satisfy the schema.
     """
-    if proposal.get('source_sha256')!=details['source_sha256'] or not proposal.get('model_version'):
+    if not isinstance(proposal,dict) or proposal.get('source_sha256')!=details['source_sha256'] or not proposal.get('model_version'):
         raise ValueError('Semantic evidence must bind source and model version')
     frames={f['sha256']:f for f in details['frames']}
     rows=proposal.get('scenes',[])

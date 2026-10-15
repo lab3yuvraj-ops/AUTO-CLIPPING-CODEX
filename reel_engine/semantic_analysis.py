@@ -58,8 +58,11 @@ def analyze(base,details,transcript,root,*,endpoint='',model='',key='',allow_rem
         result={'status':'needs_review','reason':'Vision unavailable or proposal failed grounding/schema validation; keep stable reviewed framing.',
                 'api_calls':1,'estimated_api_cost':None,'publication_approved':False}
         atomic_json(root/'semantic-analysis-status.json',result);return result
+    raw_usage=body.get('usage',{})
+    usage={k:v for k,v in raw_usage.items() if k in ('input_tokens','output_tokens','prompt_tokens','completion_tokens','total_tokens')
+           and isinstance(v,int) and not isinstance(v,bool) and v>=0} if isinstance(raw_usage,dict) else {}
     result={'signature':signature,'proposal':proposal,'status':'proposal_needs_inspection','cache_reused':False,
-            'api_calls_this_run':1,'estimated_api_cost':None,'provider_usage':body.get('usage',{}),
+            'api_calls_this_run':1,'estimated_api_cost':None,'provider_usage':usage,
             'model_version':model,'publication_approved':False}
     result['content_hash']=fingerprint(result);atomic_json(path,result);atomic_json(root/'semantic-proposed-spec.json',spec)
     return result

@@ -49,3 +49,14 @@ def test_remote_requires_explicit_opt_in(tmp_path):
 def test_changed_input_frame_is_never_trusted(tmp_path):
     b,d,_=data(tmp_path);open(d['frames'][0]['file'],'wb').write(b'changed')
     with pytest.raises(ValueError,match='frame changed'):semantic.analyze(b,d,{},tmp_path/'out',endpoint='http://localhost:8080/chat',model='v1')
+
+
+def test_non_object_model_response_returns_review_without_retry(tmp_path,monkeypatch):
+    b,d,_=data(tmp_path);calls=[]
+    class Response:
+        status_code=200;content=b'{}'
+        def json(self):return {'choices':[{'message':{'content':'[]'}}]}
+    def post(*a,**kw):calls.append(1);return Response()
+    monkeypatch.setattr(semantic.httpx,'post',post)
+    result=semantic.analyze(b,d,{},tmp_path/'out',endpoint='http://localhost:8080/chat',model='v1')
+    assert result['status']=='needs_review' and len(calls)==1
