@@ -82,7 +82,11 @@ def fast_render_clip(source,edit,tracking,path,config,threads=None):
     for i,s in enumerate(edit['segments']):
         a=s['source_start']-seek;b=s['source_end']-seek;d=b-a
         parts.append(f'[0:v]trim=start={a}:end={b},setpts=PTS-STARTPTS[v{i}]')
-        parts.append(f'[0:a]atrim=start={a}:end={b},asetpts=PTS-STARTPTS,afade=t=in:d=0.005,afade=t=out:st={max(0,d-.005)}:d=0.005[a{i}]')
+        # Opus/Matroska seek pre-skip can shift audio by a millisecond even
+        # with integer pre-roll. Keep the original absolute audio decode/trim
+        # route; only video needs the expensive bounded seek optimization.
+        audio_input=1 if seek else 0
+        parts.append(f'[{audio_input}:a]atrim=start={s["source_start"]}:end={s["source_end"]},asetpts=PTS-STARTPTS,afade=t=in:d=0.005,afade=t=out:st={max(0,d-.005)}:d=0.005[a{i}]')
         labels.append(f'[v{i}][a{i}]')
     if len(labels)==1:video='[v0]';audio='[a0]'
     else:
@@ -95,8 +99,9 @@ def fast_render_clip(source,edit,tracking,path,config,threads=None):
     thread_options=[] if threads is None else ['-threads',str(max(1,int(threads)))]
     preset=config.get('x264_preset','fast')
     if preset not in ('fast','veryfast'):raise ValueError('Use a benchmarked CPU x264 preset: fast or veryfast.')
-    input_options=['-ss',str(seek)] if seek else []
-    run(['ffmpeg','-v','error','-y','-hwaccel','none',*thread_options,*input_options,'-i',str(Path(source).resolve()),
+    source_path=str(Path(source).resolve())
+    input_options=(['-ss',str(seek),'-an','-i',source_path,'-vn','-i',source_path] if seek else ['-i',source_path])
+    run(['ffmpeg','-v','error','-y','-hwaccel','none',*thread_options,*input_options,
          '-filter_complex_threads',str(max(1,int(threads or 2))),'-filter_complex_script','fast-filter.txt',
          '-map','[outv]','-map',audio,'-c:v','libx264','-preset',preset,'-crf','18',*thread_options,
          '-pix_fmt','yuv420p','-c:a','aac','-b:a','192k','-ar','48000','-ac','2',

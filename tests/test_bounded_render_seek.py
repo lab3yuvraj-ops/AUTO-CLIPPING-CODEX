@@ -9,11 +9,12 @@ from reel_engine.fast_render import fast_render_clip
 
 @pytest.mark.skipif(not shutil.which('ffmpeg'), reason='FFmpeg required')
 @pytest.mark.parametrize('gapped', [False, True])
-def test_late_fractional_seek_preserves_decoded_video_audio_events_and_camera(tmp_path,gapped):
-    source=tmp_path/'source.mp4'
+@pytest.mark.parametrize('audio_codec,extension',[('aac','mp4'),('libopus','mkv')])
+def test_late_fractional_seek_preserves_decoded_video_audio_events_and_camera(tmp_path,gapped,audio_codec,extension):
+    source=tmp_path/('source.'+extension)
     run(['ffmpeg','-v','error','-y','-f','lavfi','-i','testsrc2=size=320x180:rate=30:duration=16',
          '-f','lavfi','-i','sine=frequency=587:sample_rate=48000:duration=16',
-         '-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-c:a','aac','-shortest',str(source)])
+         '-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-c:a',audio_codec,'-shortest',str(source)])
     segments=([{'source_start':12.34,'source_end':13.34,'output_start':0.,'output_end':1.},
                {'source_start':14.34,'source_end':15.34,'output_start':1.,'output_end':2.}]
               if gapped else [{'source_start':12.34,'source_end':14.34,'output_start':0.,'output_end':2.}])
