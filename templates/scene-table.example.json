@@ -1,0 +1,61 @@
+{
+  "scenes": [
+    {
+      "id": "scene-1",
+      "start": 0,
+      "end": 40,
+      "center": 0.5,
+      "kind": "character",
+      "evidence": "Replace with actual source frame identity/bounds evidence",
+      "confidence": 0.9,
+      "positions": [],
+      "subject_boxes": [
+        {
+          "t": 0,
+          "box": [
+            0.4,
+            0.1,
+            0.2,
+            0.8
+          ],
+          "visible_subject_box": [
+            0.4,
+            0.1,
+            0.2,
+            0.8
+          ],
+          "bounds_evidence": "REPLACE with actual reviewed source frame/hash and full subject extent evidence"
+        },
+        {
+          "t": 40,
+          "box": [
+            0.4,
+            0.1,
+            0.2,
+            0.8
+          ],
+          "visible_subject_box": [
+            0.4,
+            0.1,
+            0.2,
+            0.8
+          ],
+          "bounds_evidence": "REPLACE with actual reviewed source frame/hash and full subject extent evidence"
+        }
+      ],
+      "action_boxes": [
+        {
+          "t": 0,
+          "bound_type": "action",
+          "box": [
+            0.2,
+            0.4,
+            0.6,
+            0.6
+          ],
+          "bounds_evidence": "REPLACE with actual reviewed secondary gesture/prop bounds; do not demote the main focus"
+        }
+      ]
+    }
+  ]
+}
