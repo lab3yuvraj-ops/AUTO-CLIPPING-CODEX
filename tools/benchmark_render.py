@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from reel_engine.render import file_hash, probe, render_clip
 from reel_engine.fast_render import fast_render_clip
+from reel_engine.performance import measure
 
 
 def main():
@@ -28,14 +29,15 @@ def main():
     source_hash = file_hash(args.source)
     hash_seconds = time.perf_counter()-start
     start = time.perf_counter()
-    if args.renderer == 'legacy':
-        info = render_clip(args.source, recipe['edit'], recipe['tracking'], out/'story.mp4', {})
-    else:
-        info = fast_render_clip(args.source, recipe['edit'], recipe['tracking'], out/'story.mp4', {'input_seek':not args.no_input_seek}, args.threads)
+    with measure(out,'render') as resources:
+        if args.renderer == 'legacy':
+            info = render_clip(args.source, recipe['edit'], recipe['tracking'], out/'story.mp4', {})
+        else:
+            info = fast_render_clip(args.source, recipe['edit'], recipe['tracking'], out/'story.mp4', {'input_seek':not args.no_input_seek}, args.threads)
     elapsed = time.perf_counter()-start
     result = {'renderer': args.renderer, 'seconds': elapsed, 'source_hash_seconds': hash_seconds,
               'source_sha256': source_hash, 'recipe_sha256': file_hash(args.recipe),
-              'render_info': info, 'probe': probe(out/'story.mp4'),
+              'render_info': info, 'probe': probe(out/'story.mp4'),'resources':resources,
               'reused': ['source footage', 'selected passage', 'verified words', 'reviewed framing plan'],
               'fresh_work': ['camera planning', 'caption events', 'video encoding'],
               'not_end_to_end': True, 'inspection_or_publication_approved': False}

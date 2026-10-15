@@ -333,10 +333,16 @@ def _render(ident,edit_path,keep_lossless=False,threads=None):
     edit_spec_hash=hashlib.sha256(json.dumps(spec,sort_keys=True).encode()).hexdigest()
     revised=bool(job.get('video') and job.get('edit_spec_hash') and job['edit_spec_hash']!=edit_spec_hash)
     keep_lossless=keep_lossless or revised or job.get('keep_lossless',False)
-    direct=bool(job.get('fast') and not keep_lossless)
+    direct=bool((job.get('fast') or settings.render_backend=='direct') and not keep_lossless)
+    # Legacy reviewed context-scene jobs remain supported. The new strict
+    # contract applies to scene-table plans or explicitly selected direct mode;
+    # it must not block the existing fast skip-once caption/context workflow.
+    if settings.render_backend=='direct' or (tracking.get('visual_targets') and all(t.get('full_subject_bounds_confirmed') for t in tracking['visual_targets'])):
+        from reel_engine.editing_plan import save_plan
+        save_plan(root,job,spec,backend='direct' if direct else 'legacy',preset=settings.x264_preset if direct else 'fast')
     from reel_engine.outro import resolve_outro,append_outro
     outro=resolve_outro(spec,STATE/'output-defaults.json')
-    signature=hashlib.sha256(json.dumps({'source':job['source_sha256'],'edit':edit,'tracking':tracking,'outro':outro,'engine_version':version,'font':'Creepster','caption_y':1420,'single_pass':direct},sort_keys=True).encode()).hexdigest()
+    signature=hashlib.sha256(json.dumps({'source':job['source_sha256'],'edit':edit,'tracking':tracking,'outro':outro,'engine_version':version,'font':'Creepster','caption_y':1420,'single_pass':direct,'preset':settings.x264_preset if direct else 'fast'},sort_keys=True).encode()).hexdigest()
     if job.get('render_signature')==signature and Path(job.get('video','')).is_file() and digest(Path(job['video']))==job.get('render_sha256'):
         if job.get('fast') and not job.get('publishing') and not job.get('post_id'):
             job['status']='Validation failed' if any(c['status']=='fail' for c in job.get('checks',[])) else 'Needs approval';save(path,job)
@@ -345,10 +351,12 @@ def _render(ident,edit_path,keep_lossless=False,threads=None):
     job['status']='Rendering';save(path,job)
     video=root/'reel.mp4'
     body=root/'story.mp4' if outro else video
-    if direct:
-        from reel_engine.fast_render import fast_render_clip
-        info=fast_render_clip(job['source'],edit,tracking,body,{'font':'Creepster','caption_y':1420},threads=threads)
-    else:info=render_clip(job['source'],edit,tracking,body,{'font':'Creepster','caption_y':1420})
+    from reel_engine.performance import measure
+    with measure(root,'render'):
+        if direct:
+            from reel_engine.fast_render import fast_render_clip
+            info=fast_render_clip(job['source'],edit,tracking,body,{'font':'Creepster','caption_y':1420,'x264_preset':settings.x264_preset},threads=threads)
+        else:info=render_clip(job['source'],edit,tracking,body,{'font':'Creepster','caption_y':1420})
     validation_started=time.perf_counter()
     checks=validate_render(body,edit,60,tracking,info['caption_events'],minimum=30,render_info=info)
     info['timings']['validation_seconds']=time.perf_counter()-validation_started
@@ -432,6 +440,10 @@ def main():
     p=sub.add_parser('fast-gate');p.add_argument('job');p.add_argument('--evidence',required=True)
     p=sub.add_parser('fast-prepare');p.add_argument('job');p.add_argument('--selection',required=True)
     p=sub.add_parser('fast-details');p.add_argument('job');p.add_argument('--selection',required=True)
+    p=sub.add_parser('plan-check');p.add_argument('job');p.add_argument('--edit',required=True)
+    p=sub.add_parser('semantic-plan');p.add_argument('job');p.add_argument('--base',required=True);p.add_argument('--details',required=True)
+    p=sub.add_parser('doctor')
+    p=sub.add_parser('performance-report');p.add_argument('job')
     args=parser.parse_args();STATE.mkdir(exist_ok=True)
     if getattr(args,'cookies_from_browser',None) is not None:settings.youtube_cookies_from_browser=args.cookies_from_browser
     # Timing marks must remain usable while a download/verification CLI holds the workflow lock.
@@ -452,7 +464,24 @@ def main():
         except OSError:raise SystemExit('Another local workflow command is running.')
         try:
             command_started=time.perf_counter();wall_started=time.time();succeeded=False
-            if args.command=='connect':result=connect(args.channel)
+            if args.command=='doctor':
+                from reel_engine.doctor import check
+                result=check(ROOT,settings)
+            elif args.command=='performance-report':
+                from reel_engine.performance import summarize
+                result=summarize(job_path(args.job).parent)
+            elif args.command=='plan-check':
+                from reel_engine.editing_plan import save_plan
+                result=save_plan(job_path(args.job).parent,read(job_path(args.job)),read(Path(args.edit)),backend=settings.render_backend,preset=settings.x264_preset)
+            elif args.command=='semantic-plan':
+                from reel_engine.semantic_analysis import analyze as semantic_analyze
+                job=read(job_path(args.job));details=read(Path(args.details))
+                if 'passages' in details:
+                    base=read(Path(args.base));details=next(p for p in details['passages'] if p['range'][0]<=base['candidate']['start'] and base['candidate']['end']<=p['range'][1])
+                result=semantic_analyze(read(Path(args.base)),details,read(Path(job['transcript'])),job_path(args.job).parent,
+                    endpoint=settings.semantic_vision_url,model=settings.semantic_vision_model,key=settings.semantic_vision_api_key,allow_remote=settings.semantic_allow_remote)
+                result={k:v for k,v in result.items() if k not in ('provider_usage','proposal')}
+            elif args.command=='connect':result=connect(args.channel)
             elif args.command=='onboarding':
                 from reel_engine.onboarding import onboard
                 result=onboard(ROOT,args.channel,connect,args.from_env)
@@ -521,7 +550,9 @@ def main():
             elif args.command=='fast-details':
                 from reel_engine.detail import make_details
                 job=read(job_path(args.job));selection=read(Path(args.selection))
-                result=make_details(job['source'],job_path(args.job).parent,[(c['start'],c['end']) for c in selection['candidates']])
+                cues=read(Path(job['transcript'])).get('cues',[]) if job.get('transcript') else []
+                result=make_details(job['source'],job_path(args.job).parent,[(c['start'],c['end']) for c in selection['candidates']],
+                    adaptive=settings.adaptive_details,mode=settings.processing_mode,context_times=[c['start'] for c in cues])
                 save(job_path(args.job).parent/'selected-details.json',result)
             elif args.command=='overview':
                 from reel_engine.overview import make_overview
