@@ -74,9 +74,13 @@ def fast_render_clip(source,edit,tracking,path,config,threads=None):
     # A named crop receives exact per-frame integer positions. No long nested
     # expression, approximate sparse interpolation or fixed-filter-width zoom.
     (root/'crop-commands.txt').write_text('\n'.join(f'{i/30:.9f} crop@portrait x {x};' for i,x in enumerate(camera['xs'])),encoding='utf-8')
+    # Seek with decoder pre-roll, then trim on the rebased timeline. Previously
+    # every late clip decoded the entire source lead-in before trim discarded it.
+    # Keep one second of pre-roll and preserve frame/audio-accurate filter trims.
+    seek=max(0, math.floor(min(s['source_start'] for s in edit['segments']))-1) if config.get('input_seek',True) else 0
     parts=[];labels=[]
     for i,s in enumerate(edit['segments']):
-        a=s['source_start'];b=s['source_end'];d=b-a
+        a=s['source_start']-seek;b=s['source_end']-seek;d=b-a
         parts.append(f'[0:v]trim=start={a}:end={b},setpts=PTS-STARTPTS[v{i}]')
         parts.append(f'[0:a]atrim=start={a}:end={b},asetpts=PTS-STARTPTS,afade=t=in:d=0.005,afade=t=out:st={max(0,d-.005)}:d=0.005[a{i}]')
         labels.append(f'[v{i}][a{i}]')
@@ -89,9 +93,12 @@ def fast_render_clip(source,edit,tracking,path,config,threads=None):
     planning=time.perf_counter()-started
     temp=root/'fast-render.tmp.mp4'
     thread_options=[] if threads is None else ['-threads',str(max(1,int(threads)))]
-    run(['ffmpeg','-v','error','-y','-hwaccel','none',*thread_options,'-i',str(Path(source).resolve()),
+    preset=config.get('x264_preset','fast')
+    if preset not in ('fast','veryfast'):raise ValueError('Use a benchmarked CPU x264 preset: fast or veryfast.')
+    input_options=['-ss',str(seek)] if seek else []
+    run(['ffmpeg','-v','error','-y','-hwaccel','none',*thread_options,*input_options,'-i',str(Path(source).resolve()),
          '-filter_complex_threads',str(max(1,int(threads or 2))),'-filter_complex_script','fast-filter.txt',
-         '-map','[outv]','-map',audio,'-c:v','libx264','-preset','fast','-crf','18',*thread_options,
+         '-map','[outv]','-map',audio,'-c:v','libx264','-preset',preset,'-crf','18',*thread_options,
          '-pix_fmt','yuv420p','-c:a','aac','-b:a','192k','-ar','48000','-ac','2',
          '-t',str(camera['count']/30),'-movflags','+faststart',str(temp)],cwd=root)
     temp.replace(path)
@@ -102,6 +109,7 @@ def fast_render_clip(source,edit,tracking,path,config,threads=None):
             'visual_target_frames':camera['target_frames'],'focus_motion_failed_frames':0,
             'focus_motion_tracked_frames':0,'focus_identity_anchored_frames':camera['target_frames'],
             'focus_reacquired_frames':0,'camera_easing_seconds':1.2,'single_pass':True,
+            'input_seek_seconds':seek,'x264_preset':preset,
             'scaler':'FFmpeg Lanczos with four lobes; normal path uses OpenCV Lanczos4 (not pixel identical)'}
 
 
