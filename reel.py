@@ -443,7 +443,7 @@ def main():
     p=sub.add_parser('fast-prepare');p.add_argument('job');p.add_argument('--selection',required=True)
     p=sub.add_parser('fast-details');p.add_argument('job');p.add_argument('--selection',required=True)
     p=sub.add_parser('plan-check');p.add_argument('job');p.add_argument('--edit',required=True)
-    p=sub.add_parser('semantic-plan');p.add_argument('job');p.add_argument('--base',required=True);p.add_argument('--details',required=True);p.add_argument('--authorize-gemini',action='store_true',help='Explicitly authorize a bounded free-project semantic request; management checks still required.')
+    p=sub.add_parser('semantic-plan');p.add_argument('job');p.add_argument('--base',required=True);p.add_argument('--details',required=True);p.add_argument('--estimate-only',action='store_true',help='Local frame/coverage/token admission estimate; no HTTP requests.');p.add_argument('--authorize-gemini',action='store_true',help='Explicitly authorize a bounded free-project semantic request; management checks still required.')
     p=sub.add_parser('gemini-verify');p.add_argument('--confirm-free-tier',action='store_true',help='Confirm AI Studio Free plan/model/quotas. Read-only management checks; no Gemini inference.')
     sub.add_parser('gemini-models',help='Read-only ListModels discovery; never selects a model or generates content.')
     p=sub.add_parser('doctor')
@@ -453,10 +453,17 @@ def main():
     # Timing marks must remain usable while a download/verification CLI holds the workflow lock.
     if args.command in ('stage-mark','timing-report','phase'):
         from reel_engine.timing import mark,report,table
+        phase_command_started=time.time()
         job_path(args.job)
         if args.command=='phase':
             from reel_engine.timing import interactive_phase
-            print(json.dumps(interactive_phase(STATE,args.job,args.phase,args.event,round_number=args.round,run_id=args.run_id)))
+            phase_result=interactive_phase(STATE,args.job,args.phase,args.event,round_number=args.round,run_id=args.run_id)
+            print(json.dumps(phase_result))
+            # Phase commands used to return before CLI/gap coverage, leaving
+            # command-end -> next phase-start time unattributed. Record only
+            # actual current endpoints, never infer historical activity.
+            from reel_engine.timing import record_command_coverage
+            record_command_coverage(STATE,phase_result['job'],'phase',phase_command_started,time.time(),True)
         elif args.command=='stage-mark':print(json.dumps(mark(STATE,args.job,args.stage,args.event,run_id=args.run_id,cached=args.cached)))
         else:
             data=report(STATE,args.job,args.run_id);save(job_path(args.job).parent/'timing-report.json',data);print(table(data))
@@ -498,6 +505,13 @@ def main():
                          'source_width':job.get('metadata',{}).get('width'),'source_height':job.get('metadata',{}).get('height')}
                 selected_transcript={'words':[{k:w.get(k) for k in ('start','end','text','speaker')} for w in base['words']],
                                      'source_time':True,'wording_is_not_a_visual_identity':True}
+                if args.estimate_only:
+                    from reel_engine.semantic_frames import estimate
+                    from reel_engine.gemini_free import generation_config,semantic_prompt
+                    result=estimate(details,selected_transcript,generation_config(settings.gemini_model,settings.gemini_max_output_tokens),settings.gemini_frame_strategy,
+                                    prompt=semantic_prompt(base,details,selected_transcript,settings.gemini_model))
+                    save(job_path(args.job).parent/('semantic-estimate-'+settings.gemini_frame_strategy+'.json'),result)
+                    print(json.dumps(result,indent=2));succeeded=True;return
                 with stage(STATE,job.get('timing_job',args.job),'gemini_semantic_analysis',run_id=job.get('run_id')) as interval:
                     result=semantic_analyze(base,details,selected_transcript,job_path(args.job).parent,settings=settings,authorized=args.authorize_gemini)
                     from reel_engine.gemini_free import stage_result
@@ -604,15 +618,11 @@ def main():
                 if job.get('fast'):
                     from reel_engine.fast import check_recheck_ranges
                     check_recheck_ranges(Path(job['transcript']).parent,ranges)
-                    # Mapped proxy evidence does not create child audio. Rechecks
-                    # listen to the child's final media in its local timeline.
-                    root=Path(job['transcript']).parent;audio=root/'local-audio.wav'
-                    if digest(Path(job['source']))!=job['source_sha256']:raise ValueError('Final source changed before speech recheck.')
-                    if not audio.exists():
-                        from reel_engine.render import run
-                        temporary=root/'recheck-audio.tmp.wav'
-                        run(['ffmpeg','-v','error','-y','-i',job['source'],'-vn','-ar','16000','-ac','1','-c:a','pcm_s16le',str(temporary)])
-                        temporary.replace(audio)
+                # Mapped proxy evidence does not create child audio in either mode.
+                from reel_engine.local_transcription import ensure_recheck_audio
+                from reel_engine.timing import stage
+                with stage(STATE,job.get('timing_job',args.job),'recheck_audio_preparation',run_id=job.get('run_id')):
+                    ensure_recheck_audio(job,Path(job['transcript']).parent)
                 result=recheck_local(Path(job['transcript']).parent,ranges,force=args.force)
             elif args.command=='align':
                 from reel_engine.alignment import align_passages
