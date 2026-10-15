@@ -14,23 +14,6 @@ from .errors import StageError
 
 _DLL_HANDLES=[]
 
-
-def ensure_recheck_audio(job,root):
-    """Careful and fast section children share final-media-bound recheck audio."""
-    from .render import file_hash,run
-    from .youtube_transcript import atomic_json
-    root=Path(root);source=Path(job['source']);audio=root/'local-audio.wav';receipt=root/'recheck-audio-binding.json'
-    source_hash=file_hash(source)
-    if source_hash!=job['source_sha256']:raise ValueError('Final source changed before speech recheck.')
-    if audio.exists() and receipt.exists():
-        old=json.loads(receipt.read_text(encoding='utf8'))
-        if old.get('source_sha256')==source_hash and old.get('audio_sha256')==file_hash(audio):return audio
-    temporary=root/'recheck-audio.tmp.wav'
-    run(['ffmpeg','-v','error','-y','-hwaccel','none','-i',str(source),'-vn','-ar','16000','-ac','1','-c:a','pcm_s16le',str(temporary)])
-    temporary.replace(audio)
-    atomic_json(receipt,{'source_sha256':source_hash,'audio_sha256':file_hash(audio),'device':'cpu','sample_rate':16000,'channels':1})
-    return audio
-
 @lru_cache(maxsize=2)
 def load_whisper(allow_download=False,cpu_threads=0,num_workers=1):
     os.environ['HF_HUB_OFFLINE']='0' if allow_download else '1'

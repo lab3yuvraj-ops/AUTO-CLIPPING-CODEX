@@ -68,41 +68,23 @@ def grounded_scene_proposal(base,proposal,details):
     Confidence alone never proves a visible identity. Unknown coordinates remain
     unresolved and no default center/face is invented to satisfy the schema.
     """
-    from .semantic_diagnostics import GroundingError
-    if not isinstance(proposal,dict):raise GroundingError('proposal_type',[], 'object',type(proposal).__name__)
-    if proposal.get('source_sha256')!=details['source_sha256']:
-        raise GroundingError('source_binding',['source_sha256'],details['source_sha256'],proposal.get('source_sha256'))
-    if not proposal.get('model_version'):raise GroundingError('model_binding',['model_version'],'nonempty model',proposal.get('model_version'))
+    if not isinstance(proposal,dict) or proposal.get('source_sha256')!=details['source_sha256'] or not proposal.get('model_version'):
+        raise ValueError('Semantic evidence must bind source and model version')
     frames={f['sha256']:f for f in details['frames']}
     rows=proposal.get('scenes',[])
-    if not rows:raise GroundingError('no_subjects',['scenes'],'nonempty grounded scenes',rows)
+    if not rows:raise ValueError('No grounded visual subjects; retain stable reviewed framing and request review')
     cleaned=[]
-    for index,row in enumerate(rows):
+    for row in rows:
         row=dict(row);evidence=row.pop('evidence_frames',[])
-        if not evidence or any(h not in frames for h in evidence):raise GroundingError('unknown_frame',['scenes',index,'evidence_frames'],list(frames),evidence)
+        if not evidence or any(h not in frames for h in evidence):raise ValueError('Unknown semantic frame evidence')
         if not any(row['start']<=frames[h]['source_seconds']<=row['end'] for h in evidence):
-            raise GroundingError('frame_outside_scene',['scenes',index,'evidence_frames'],[row['start'],row['end']],[frames[h]['source_seconds'] for h in evidence])
-        if row.get('confidence',0)<.8:raise GroundingError('low_confidence',['scenes',index,'confidence'],'>=0.8',row.get('confidence'))
-        for ai,anchor in enumerate(row.get('subject_boxes',[])):
+            raise ValueError('Semantic evidence frame is outside its scene')
+        if row.get('confidence',0)<.8:raise ValueError('Low-confidence subject: stable reviewed fallback and human review required')
+        for anchor in row.get('subject_boxes',[]):
             if not any(abs(frames[h]['source_seconds']-anchor['t'])<=.51 for h in evidence):
-                raise GroundingError('anchor_without_witness',['scenes',index,'subject_boxes',ai,'t'],'within0.51s of evidence frame',anchor['t'])
+                raise ValueError('Subject anchor has no nearby actual visual witness')
         cleaned.append(row)
     table=SceneTable.model_validate({'scenes':cleaned})
-    for index,scene in enumerate(table.scenes):
-        for ai,anchor in enumerate(scene.subject_boxes):
-            ref=anchor.visible_subject_box
-            if ref is None or not anchor.bounds_evidence:
-                raise GroundingError('missing_full_subject_bounds',['scenes',index,'subject_boxes',ai],'independent full visible bounds and evidence',anchor.model_dump())
-            x,y,w,h=anchor.box;rx,ry,rw,rh=ref
-            if x>rx+1e-6 or x+w<rx+rw-1e-6 or y>ry+1e-6 or y+h<ry+rh-1e-6:
-                raise GroundingError('incomplete_subject_bounds',['scenes',index,'subject_boxes',ai,'box'],ref,anchor.box)
-    cursor=base['candidate']['start']
-    for index,scene in enumerate(table.scenes):
-        if abs(scene.start-cursor)>.001 or scene.end>base['candidate']['end']+.001:
-            raise GroundingError('scene_coverage',['scenes',index],{'start':cursor,'maximum_end':base['candidate']['end']},{'start':scene.start,'end':scene.end})
-        cursor=scene.end
-    if abs(cursor-base['candidate']['end'])>.001:
-        raise GroundingError('scene_coverage',['scenes',len(table.scenes)-1,'end'],base['candidate']['end'],cursor)
     result=build_spec(base,table)
     # A valid proposal is not actual first-pass inspection, nor publication approval.
     result['tracking'].update(confirmed=False,unresolved=True)

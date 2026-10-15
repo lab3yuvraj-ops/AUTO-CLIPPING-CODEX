@@ -61,7 +61,3 @@ Use `tools/build_release.py` to prepare an allowlisted student export. It scans 
 ```
 
 Tests cover downloader bounds, caption caching/fallback, selected verification, identity gates, crop/action safety, review/hash carry-over, timing and publication safeguards. Tests do not establish perfect semantic identity, wording or lip sync on unseen footage. YouTube availability, throttling, cookies, account permissions, hardware and required editorial corrections can block or slow a run. No fixed completion-time guarantee is made. A fresh clone has not been independently benchmarked on every student's machine.
-
-## Optional Gemini free-project semantic proposals
-
-The selected hosted vision model is standard `gemini-3.8-flash` on a verified unlinked Free project. Explicit legacy `gemini-2.5-flash` remains supported for eligible existing projects, with no automatic model switching. Default is off. A key alone does not verify eligibility. Read [the setup/benchmark guide](docs/GEMINI-FREE-TIER.md) before enabling it. Existing CPU processing, caption style, source-specific inspection and publication safeguards remain required. The prior2.5 attempt stopped on404; the prepared3.8 benchmark has not run. See [model validation](docs/GEMINI-MODEL-VALIDATION.md).

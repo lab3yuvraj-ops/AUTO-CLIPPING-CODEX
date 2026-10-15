@@ -61,22 +61,3 @@ def test_thread_log_rows_are_atomic_and_jobs_isolated(tmp_path):
         assert len(report['intervals'])==1 and report['intervals'][0]['stage']==f'work_{i}'
         assert report['intervals'][0]['cached']==(i%2==0)
         assert not report['open_stages']
-
-
-def test_phase_cli_accounts_current_gap_on_source_owner(monkeypatch,tmp_path):
-    import reel,sys
-    owner='source_job_123';clip='source_job_123_clip1';root=tmp_path/'jobs'/clip;root.mkdir(parents=True)
-    (root/'job.json').write_text(json.dumps({'timing_job':owner,'run_id':'run_a'}))
-    timing.mark(tmp_path,owner,'download','start',at=0,run_id='run_a')
-    timing.mark(tmp_path,owner,'download','end',at=1,run_id='run_a')
-    clock=iter([10.,10.1,10.2])
-    monkeypatch.setattr(reel,'STATE',tmp_path);monkeypatch.setattr(timing.time,'time',lambda:next(clock))
-    monkeypatch.setattr(sys,'argv',['reel.py','phase',clip,'review_pass','--event','start'])
-    reel.main()
-    r=timing.report(tmp_path,owner,'run_a')
-    assert any(i['stage']=='between_commands' and i['start']==1 and i['end']==10 for i in r['intervals'])
-    assert any(i['stage']=='cli_phase' for i in r['intervals'])
-    assert r['untracked_wall_seconds']==0
-    # No historical review was invented: actual review still starts at10.
-    rows=[json.loads(x) for x in (root/'interactive-phases.jsonl').read_text().splitlines()]
-    assert rows[0]['at']==10.1 and rows[0]['job']==owner

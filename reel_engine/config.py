@@ -38,22 +38,6 @@ class Settings(BaseSettings):
     semantic_vision_model:str=''
     semantic_vision_api_key:str=''
     semantic_allow_remote:bool=False
-    # Gemini Developer API is the only permitted semantic provider. Disabled
-    # until the operator confirms the free plan AND authorizes a CLI request.
-    gemini_enabled:bool=False
-    gemini_api_key:str=Field(default='',repr=False)
-    gemini_model:str='gemini-3.8-flash'
-    gemini_project_id:str=''
-    gemini_free_tier_confirmed:bool=False
-    google_oauth_access_token:str=Field(default='',repr=False)
-    gemini_rpm:int=Field(default=1,ge=1,le=10)
-    gemini_rpd:int=Field(default=20,ge=1,le=1000)
-    gemini_tpm:int=Field(default=150000,ge=1000,le=1000000)
-    gemini_max_frames:int=Field(default=80,ge=1,le=80)
-    gemini_frame_strategy:str=Field(default='baseline',pattern='^(baseline|evidence-preserving)$')
-    gemini_max_output_tokens:int=Field(default=8192,ge=1024,le=16384)
-    gemini_max_retries:int=Field(default=2,ge=0,le=2)
-    gemini_backoff_cap_seconds:float=Field(default=30,ge=0,le=60)
     motion_check_interval:float=Field(default=.1,ge=.033,le=.25)
     parallel_downloads:bool=False
     youtube_api_key:str=''

@@ -10,23 +10,12 @@ from .youtube_transcript import atomic_json
 def detect_boundary_cuts(source,start,end,root):
     # Same FFmpeg scene score as detail.py, at full temporal resolution. Scores
     # are proposals, not calibrated probabilities or proof of identity.
-    from .editing_plan import fingerprint
-    cache=Path(root)/'boundary-detection-cache.json'
-    signature=fingerprint({'source':file_hash(source),'start':start,'end':end,
-                           'implementation':file_hash(__file__),'threshold':.18,'window':.5})
-    if cache.exists():
-        try:
-            old=json.loads(cache.read_text(encoding='utf8'))
-            if old.get('signature')==signature and old.get('content_hash')==fingerprint(old.get('rows')):
-                return old['rows']
-        except (ValueError,TypeError,KeyError):pass
     meta=probe(source);duration=float(meta['format']['duration']);rows=[]
     for label,a,b in [('opening',max(0,start-.5),min(duration,start+.5)),('ending',max(0,end-.5),min(duration,end+.5))]:
         result=run(['ffmpeg','-hide_banner','-hwaccel','none','-ss',str(a),'-t',str(b-a),'-i',str(source),'-an','-filter_threads','1','-vf',"scale=640:-2,select='gt(scene,0.18)',metadata=print:key=lavfi.scene_score,showinfo",'-fps_mode','vfr','-f','null','-'])
         stamps=[float(x) for x in re.findall(r'\bn:\s*\d+.*?\bpts_time:([\d.eE+-]+)',result.stderr)]
         scores=[float(x) for x in re.findall(r'lavfi.scene_score=([\d.eE+-]+)',result.stderr)]
         rows.extend({'time':a+t,'score':scores[i] if i<len(scores) else 0,'edge':label,'evidence':'Actual boundary audio/video-source frames; FFmpeg scene score'} for i,t in enumerate(stamps) if a<=a+t<b)
-    atomic_json(cache,{'signature':signature,'rows':rows,'content_hash':fingerprint(rows)})
     return rows
 
 def snap_boundaries(candidate,words,cuts,fps=30,window=.5,threshold=.30):

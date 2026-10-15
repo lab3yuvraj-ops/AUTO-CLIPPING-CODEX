@@ -24,21 +24,3 @@ def test_batch_checks_load_one_model_and_invalidate_when_audio_changes(monkeypat
     speech.recheck_local(tmp_path,[(0,.5)])
     assert len(requests)==3
     with pytest.raises(ValueError,match='outside'):speech.recheck_local(tmp_path,[(0,2)])
-
-
-@pytest.mark.parametrize('fast',[False,True])
-def test_child_recheck_audio_is_final_source_bound_cpu_and_reused(monkeypatch,tmp_path,fast):
-    from reel_engine import render
-    source=tmp_path/'source.mkv';source.write_bytes(b'source');calls=[]
-    def run(args):
-        calls.append(args);soundfile.write(args[-1],np.zeros(16000,dtype=np.float32),16000)
-    monkeypatch.setattr(render,'run',run)
-    job={'source':str(source),'source_sha256':render.file_hash(source),'fast':fast}
-    audio=speech.ensure_recheck_audio(job,tmp_path)
-    assert audio.exists() and len(calls)==1
-    assert calls[0][calls[0].index('-hwaccel')+1]=='none'
-    assert calls[0][calls[0].index('-i')+1]==str(source)
-    speech.ensure_recheck_audio(job,tmp_path);assert len(calls)==1
-    audio.write_bytes(b'changed');speech.ensure_recheck_audio(job,tmp_path);assert len(calls)==2
-    source.write_bytes(b'wrong')
-    with pytest.raises(ValueError,match='Final source changed'):speech.ensure_recheck_audio(job,tmp_path)
