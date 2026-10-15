@@ -495,8 +495,8 @@ def main():
                                      'source_time':True,'wording_is_not_a_visual_identity':True}
                 with stage(STATE,job.get('timing_job',args.job),'gemini_semantic_analysis',run_id=job.get('run_id')) as interval:
                     result=semantic_analyze(base,details,selected_transcript,job_path(args.job).parent,settings=settings,authorized=args.authorize_gemini)
-                    interval['cached']=result.get('cache_reused',False)
-                    interval['outcome']=result['status']
+                    from reel_engine.gemini_free import stage_result
+                    interval.update(stage_result(result))
                 result={k:v for k,v in result.items() if k!='proposal'}
             elif args.command=='connect':result=connect(args.channel)
             elif args.command=='onboarding':

@@ -32,6 +32,15 @@ class FreeTierBlocked(ValueError):
     """Public messages contain no provider payloads, tokens or URLs with keys."""
 
 
+def stage_result(result):
+    """Translate provider states to the timing ledger's finite outcome contract."""
+    status = result['status']
+    return {'outcome': 'success' if status == 'proposal_needs_inspection' else
+            'rejected' if status == 'blocked' else 'failed',
+            'cached': bool(result.get('cache_reused', False)),
+            'diagnostic': {'category': status}}
+
+
 def verify_free_project(settings, *, client=None, now=None, on_request=None):
     """Authoritative read-only checks immediately before EACH inference attempt.
 

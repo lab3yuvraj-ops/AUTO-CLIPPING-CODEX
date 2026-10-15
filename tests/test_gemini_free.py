@@ -212,6 +212,28 @@ def test_unreviewed_semantic_plan_stops_before_preflight(tmp_path):
         reel._pre_render_review_guard({}, {}, {},tracking,tmp_path)
 
 
+@pytest.mark.parametrize('status,outcome', [
+    ('proposal_needs_inspection', 'success'), ('needs_review', 'failed'),
+    ('paused', 'failed'), ('blocked', 'rejected')])
+def test_semantic_status_closes_timing_ledger(tmp_path,status,outcome):
+    from reel_engine.timing import stage, report
+    with stage(tmp_path,'clip','gemini_semantic_analysis',run_id='run') as interval:
+        interval.update(g.stage_result({'status':status,'cache_reused':False}))
+    saved=report(tmp_path,'clip','run')
+    assert not saved['open_stages']
+    assert saved['intervals'][0]['outcome']==outcome
+    assert saved['intervals'][0]['diagnostic']['category']==status
+
+
+def test_404_stops_without_retry_or_substitution(tmp_path):
+    b,d,p=inputs(tmp_path);c=Client(p,[Response(404,{'error':{'message':'unavailable'}})])
+    r=g.analyze(b,d,{},tmp_path/'job',settings(),authorized=True,client=c)
+    assert r['status']=='needs_review' and r['api_calls_this_run']==1
+    assert len(c.posts)==1 and r['provider_usage']=={}
+    assert r['semantic_quality_pass'] is False
+    assert not (tmp_path/'job'/'semantic-proposed-spec.json').exists()
+
+
 def test_billing_changed_before_retry_prevents_second_inference(tmp_path):
     b,d,p=inputs(tmp_path)
     class Changes(Client):
