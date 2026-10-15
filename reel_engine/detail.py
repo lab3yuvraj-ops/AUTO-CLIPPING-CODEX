@@ -11,14 +11,18 @@ from .render import file_hash, probe
 from .youtube_transcript import atomic_json
 
 
-def make_details(source, root, ranges, interval=.5):
+def make_details(source, root, ranges, interval=.5, *, adaptive=False, mode='smart', context_times=()):
     duration=float(probe(source)['format']['duration'])
     if not ranges or not math.isfinite(interval) or interval<.1 or any(
             not math.isfinite(a+b) or not 0<=a<b<=duration or b-a>180 for a,b in ranges):
         raise ValueError('Detail ranges must be within source, at most 180 seconds each.')
     fingerprint=file_hash(Path(source));started=time.perf_counter();reports=[]
     for a,b in ranges:
-        signature=hashlib.sha256(json.dumps([fingerprint,float(a),float(b),interval,2]).encode()).hexdigest()
+        sampling_key=None
+        if adaptive:
+            from .adaptive_sampling import representative_frames
+            sampling_key=[mode,list(context_times),file_hash(Path(__file__).with_name('adaptive_sampling.py'))]
+        signature=hashlib.sha256(json.dumps([fingerprint,float(a),float(b),interval,2,sampling_key]).encode()).hexdigest()
         out=Path(root)/'details'/signature[:16];out.mkdir(parents=True,exist_ok=True)
         path=out/'detail.json'
         if path.exists():
@@ -45,6 +49,9 @@ def make_details(source, root, ranges, interval=.5):
                            'scene_score':scores[i] if i<len(scores) else None})
         if not frames or frames[0]['source_seconds']-a>interval*2 or b-frames[-1]['source_seconds']>interval*2:
             raise RuntimeError('Selected frame coverage is incomplete.')
+        sampling={'mode':'dense','decoded_candidates':len(frames),'analyzed_frames':len(frames)}
+        if adaptive:
+            frames,sampling=representative_frames(frames,mode,context_times)
         pages=[]
         for offset in range(0,len(frames),12):
             sheet=Image.new('RGB',(1280,2304),'#171b19');draw=ImageDraw.Draw(sheet)
@@ -61,7 +68,7 @@ def make_details(source, root, ranges, interval=.5):
                 draw.text((x+8,y+5),f"Source {f['source_seconds']:.3f}s{mark}",fill='white')
             f=out/f'page-{offset//12+1:02d}.jpg';sheet.save(f,quality=94)
             pages.append({'file':str(f.resolve()),'sha256':file_hash(f)})
-        report={'source_sha256':fingerprint,'range':[a,b],'interval_seconds':interval,'frames':frames,
+        report={'source_sha256':fingerprint,'range':[a,b],'interval_seconds':interval,'frames':frames,'sampling':sampling,
                 'pages':[p['file'] for p in pages],'page_files':pages,'cache_reused':False,
                 'candidate_scene_cuts':[f['source_seconds'] for f in frames if (f['scene_score'] or 0)>.18],
                 'note':'Actual sequential source frames; scene scores are candidates requiring visual confirmation, not automatic identity or tracking approval.'}

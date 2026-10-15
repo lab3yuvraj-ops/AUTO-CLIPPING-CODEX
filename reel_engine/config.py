@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     full_download_max_bytes:int=Field(default=1500000000,gt=0)
     section_download_min_height:int=Field(default=2160,ge=1080)
     compact_pre_review:bool=True
+    processing_mode:str=Field(default='smart',pattern='^(fast|smart)$')
+    adaptive_details:bool=True
+    render_backend:str=Field(default='legacy',pattern='^(legacy|direct)$')
+    x264_preset:str=Field(default='fast',pattern='^(fast|veryfast)$')
+    semantic_vision_url:str=''
+    semantic_vision_model:str=''
+    semantic_vision_api_key:str=''
+    semantic_allow_remote:bool=False
     motion_check_interval:float=Field(default=.1,ge=.033,le=.25)
     parallel_downloads:bool=False
     youtube_api_key:str=''
