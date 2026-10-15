@@ -1,3 +1,5 @@
+> **Performance branch:** experimental incremental optimizations on `performance-optimization`; main is unchanged. Read [the measured report](docs/PERFORMANCE.md). No end-to-end time target or unattended semantic editing is proved. Existing output/review/publication guards remain.
+
 # AUTO CLIPPING
 
 Create reviewed vertical clips from YouTube videos, working interactively in Codex with a local Python/FFmpeg pipeline. Supply a URL, choose one or two clips, review the actual MP4s, then approve any Instagram post through your own Zernio account.

@@ -51,3 +51,9 @@ You receive the actual MP4 and the question **“Do you want to upload this vide
 Use `tools/build_release.py` to prepare a clean, allowlisted repository folder and ZIP under ignored `release/`. It includes code, docs, tests, licensed fonts, the supplied CTA and blank configuration templates. It excludes `.env`, cookies, connections, saved jobs, private footage, model weights, virtual environments and publication records. The CTA is shared intentionally as the project's supplied end card; students may replace it with their own.
 
 Authenticate GitHub locally with `gh auth login` or your Git credential manager. Do not put a personal access token into a remote URL or files. If a token was pasted into chat, revoke it after the authorized repository operation and create a fresh credential for future use. Never distribute the creator's token.
+
+## Performance branch diagnostics
+
+Run `.venv/Scripts/python.exe reel.py doctor` before the first analysis. It reports missing packages/tools/assets and model-cache presence without sending network requests or printing credentials. Install missing items using the existing instructions above; it does not install software automatically.
+
+`PROCESSING_MODE=smart` is default; `fast` reduces representative static/moving sample density through the same pipeline. This setting is separate from the opt-in `--fast` skipped-word policy. Captions, required reviews and final quality settings remain unchanged. No VLM is required for the existing Codex-operated workflow. Optional semantic endpoint settings are described in ARCHITECTURE.md; model quality, CPU cost and remote provider charges are not guaranteed. Do not configure a paid endpoint unless you intend to use that provider. No endpoint is called by default.
