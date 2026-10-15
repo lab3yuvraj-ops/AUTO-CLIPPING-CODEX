@@ -82,3 +82,7 @@ The new source URL is awaited for a fresh full baseline/optimized comparison. Re
 Full suite: **257 passed in73.75s** after the Opus audio fix. The suite includes existing publication/idempotency/approval, word-timing/highlight, review-policy/hash carry-over/correction-cap, CTA and output encoding checks. Tests ran against the existing installed Python3.11 CPU environment; this is not a new student's fresh dependency install. Actual saved15-scene/154-word spec passed the plan validator. Clean student export contains114allowlisted files and no private media/account state. Doctor correctly reports absent model cache/Instagram/semantic configuration in the isolated checkout rather than copying creator credentials.
 
 No Instagram requests/publication and no real VLM API calls were performed. No new required dependencies were introduced. Optional psutil resource measurement was unavailable. Source metadata/caption/download/Whisper stages were reused in component replays and NOT counted as fresh work. No fresh source-to-finished-clip result is available until the user supplies the new URL.
+
+## Fresh source benchmark (2026-10-16)
+See [3uYendU1XMk benchmark](BENCHMARK-3uYendU1XMk.md). Measured diagnostic-to-final-inspection window: 1054.639221s; successful source run: 964.540155s. Two full renders and two corrections. Technical checks pass, but residual framing/wording/source-subtitle issues require human review. No configured real VLM, no paid API calls, no publishing. This is not an autonomous-quality or under-ten-minute success.
+
