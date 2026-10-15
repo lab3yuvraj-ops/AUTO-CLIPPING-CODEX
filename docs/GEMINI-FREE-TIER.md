@@ -9,11 +9,11 @@ services. No new Python dependency, CUDA package or paid service is required.
 ## Model and free-project verification
 
 Official pricing was checked on 16 October 2026 IST (15 October UTC):
-[standard gemini-2.5-flash](https://ai.google.dev/gemini-api/docs/pricing#gemini-2.5-flash)
-lists free input/output for the free tier. This does NOT make the model free on
+[standard gemini-3.8-flash](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.8-flash)
+lists free input/output for the free standard tier. Read-only ListModels and project quota review selected this exact model; see [the validation record](GEMINI-MODEL-VALIDATION.md). This does NOT make the model free on
 a paid project. Image-generation variants, Pro, arbitrary Flash aliases, Vertex,
 Batch, Flex, search/maps grounding and server-side paid caching are not used.
-There is one exact model allowlist entry, no automatic upgrade/substitution.
+The selected exact profile is `gemini-3.8-flash`; explicit legacy `gemini-2.5-flash` remains for eligible existing projects. These two entries are NOT a fallback sequence. Unknown aliases/models fail closed.
 The pricing allowlist expires after30days and requires a new official-doc review.
 
 A `GEMINI_API_KEY` does not expose a trustworthy free/paid-plan flag. Before each
@@ -34,8 +34,7 @@ least privilege. The account must be permitted to read the project. The app does
 not grant roles, enable APIs, link/unlink billing or purchase anything. If Google
 returns403, fields are missing, the token expires, key/project mismatch occurs,
 or any check is unavailable, inference stops. A local confirmation flag alone
-cannot bypass the management checks. Nothing has been verified for the supplied
-chat key during implementation.
+cannot bypass the management checks. The current project passed these read-only checks for the previous2.5 attempt; every new inference still repeats them.
 
 Google does not provide an atomic “free-only” generateContent switch. These are
 immediate read-only billing snapshots, not a platform-level spending guarantee
@@ -71,7 +70,7 @@ $py = '.\.venv\Scripts\python.exe'
 $secureGeminiKey = Read-Host 'Gemini API key from your Free project' -AsSecureString
 $env:GEMINI_API_KEY = [System.Net.NetworkCredential]::new('', $secureGeminiKey).Password
 Remove-Variable secureGeminiKey
-$env:GEMINI_MODEL = 'gemini-2.5-flash'
+$env:GEMINI_MODEL = 'gemini-3.8-flash'
 $env:GEMINI_PROJECT_ID = Read-Host 'Exact project ID shown for that key in AI Studio'
 $env:GEMINI_ENABLED = 'true'
 
@@ -97,8 +96,7 @@ its HTTPS query; do not enable raw HTTP debug/proxy request logging.
 
 An ignored local `.env` supports the same variables. `.env.example` contains only
 empty examples. Do not commit credentials or use key literals in CLI arguments.
-The key supplied in chat was not persisted or used; rotate a shared/exposed key
-before configuring the local environment.
+Credentials stay in the local ignored environment. Never include them in student exports or tracked files.
 
 For this machine's isolated checkout only, use the existing production Python
 environment without copying its `.env`:
@@ -187,10 +185,9 @@ failure, active/linked/mismatched billing rejection, paid-model rejection, stale
 pricing, official payload, object prioritization, grounding/schema failures,
 unresolved approval state, boundary warnings, hash-cache hits/tampering, changed
 inputs, per-project quotas,429pause, Retry-After/backoff, sanitized errors and
-existing local caption/camera/render/review regressions. Validation on16October2026: **290 local tests passed in84.57s**, including40 focused Gemini/semantic/doctor tests. Doctor confirmed CPU-only readiness with installed local models. No real inference or management request was made. Real access, accuracy and
-speed remain untested until explicitly authorized.
+existing local caption/camera/render/review regressions. Initial implementation validation:290 local tests passed in84.57s without real network requests. Subsequent2.5 generation was explicitly authorized but stopped on404; see BENCHMARK-GEMINI-3uYendU1XMk.md. Current3.8 validation and test results are recorded in GEMINI-MODEL-VALIDATION.md. No3.8 generation or completed semantic-quality benchmark has run.
 
-## Authorized benchmark procedure — NOT RUN YET
+## Prepared 3.8 benchmark procedure — AWAITS NEW AUTHORIZATION
 
 Prepared recipe: `benchmarks/gemini-free-3uYendU1XMk.json`. One clip; source16:37;
 baseline successful execution964.5401546955109s (16m4.54s), full earlier window

@@ -5,7 +5,7 @@
   "fresh_captions": true,
   "processing_mode": "smart",
   "semantic_provider": "gemini-free-project-only",
-  "model": "gemini-2.5-flash",
+  "model": "gemini-3.8-flash",
   "real_requests_authorized": false,
   "baseline_successful_run_seconds": 964.5401546955109,
   "baseline_total_with_diagnostics_seconds": 1054.639220714569,

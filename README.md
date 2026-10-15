@@ -64,4 +64,4 @@ Tests cover downloader bounds, caption caching/fallback, selected verification, 
 
 ## Optional Gemini free-project semantic proposals
 
-Only standard Gemini2.5Flash on a verified unlinked Free project is supported for hosted visual understanding. Default is off. A key alone does not verify eligibility. Read [the setup/benchmark guide](docs/GEMINI-FREE-TIER.md) before enabling it. Existing CPU processing, caption style, source-specific inspection and publication safeguards remain required. No real Gemini benchmark has been executed yet.
+The selected hosted vision model is standard `gemini-3.8-flash` on a verified unlinked Free project. Explicit legacy `gemini-2.5-flash` remains supported for eligible existing projects, with no automatic model switching. Default is off. A key alone does not verify eligibility. Read [the setup/benchmark guide](docs/GEMINI-FREE-TIER.md) before enabling it. Existing CPU processing, caption style, source-specific inspection and publication safeguards remain required. The prior2.5 attempt stopped on404; the prepared3.8 benchmark has not run. See [model validation](docs/GEMINI-MODEL-VALIDATION.md).
