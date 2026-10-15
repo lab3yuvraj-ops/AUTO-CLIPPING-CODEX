@@ -1,5 +1,7 @@
 # Gemini free-project visual analysis
 
+Latest recovery and exact one-request command: [validation recovery](GEMINI-VALIDATION-RECOVERY.md). Private diagnostics preserve rejected responses; the model-specific schema and local grounding must both pass. Optional evidence-preserving frame selection does not approve semantic quality. No real request is authorized by configuration or this document.
+
 Implemented on `performance-optimization`. No main merge or Instagram publication.
 Only Google's Gemini Developer API is allowed for semantic vision. The previous
 generic chat-completion endpoint is rejected, including localhost VLM endpoints.
