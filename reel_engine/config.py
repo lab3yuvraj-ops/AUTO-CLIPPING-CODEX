@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # until the operator confirms the free plan AND authorizes a CLI request.
     gemini_enabled:bool=False
     gemini_api_key:str=Field(default='',repr=False)
-    gemini_model:str='gemini-2.5-flash'
+    gemini_model:str='gemini-3.8-flash'
     gemini_project_id:str=''
     gemini_free_tier_confirmed:bool=False
     google_oauth_access_token:str=Field(default='',repr=False)

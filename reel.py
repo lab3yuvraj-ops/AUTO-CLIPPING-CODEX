@@ -445,6 +445,7 @@ def main():
     p=sub.add_parser('plan-check');p.add_argument('job');p.add_argument('--edit',required=True)
     p=sub.add_parser('semantic-plan');p.add_argument('job');p.add_argument('--base',required=True);p.add_argument('--details',required=True);p.add_argument('--authorize-gemini',action='store_true',help='Explicitly authorize a bounded free-project semantic request; management checks still required.')
     p=sub.add_parser('gemini-verify');p.add_argument('--confirm-free-tier',action='store_true',help='Confirm AI Studio Free plan/model/quotas. Read-only management checks; no Gemini inference.')
+    sub.add_parser('gemini-models',help='Read-only ListModels discovery; never selects a model or generates content.')
     p=sub.add_parser('doctor')
     p=sub.add_parser('performance-report');p.add_argument('job')
     args=parser.parse_args();STATE.mkdir(exist_ok=True)
@@ -479,6 +480,10 @@ def main():
                 settings.gemini_free_tier_confirmed=True
                 result=verify_free_project(settings)
                 save(STATE/'gemini-free-tier-verification.json',result)
+            elif args.command=='gemini-models':
+                from reel_engine.gemini_free import list_models
+                result=list_models(settings)
+                save(STATE/'gemini-model-discovery.json',result)
             elif args.command=='plan-check':
                 from reel_engine.editing_plan import save_plan
                 result=save_plan(job_path(args.job).parent,read(job_path(args.job)),read(Path(args.edit)),backend=settings.render_backend,preset=settings.x264_preset)

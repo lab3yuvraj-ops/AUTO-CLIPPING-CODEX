@@ -119,6 +119,9 @@ def test_official_request_grounding_cache_and_usage(tmp_path):
     assert kw['headers']['x-goog-api-key']=='fake-secret'
     payload=kw['json'];assert 'tools' not in payload and 'cachedContent' not in payload
     assert payload['generationConfig']['responseMimeType']=='application/json'
+    assert payload['generationConfig']['thinkingConfig']=={'thinkingLevel':'medium'}
+    assert 'temperature' not in payload['generationConfig']
+    assert 'thinkingBudget' not in payload['generationConfig']['thinkingConfig']
     image=payload['contents'][0]['parts'][-1]['inlineData']['data']
     import base64
     im=Image.open(io.BytesIO(base64.b64decode(image)));assert im.width<=640 and im.height<=480
@@ -232,6 +235,59 @@ def test_404_stops_without_retry_or_substitution(tmp_path):
     assert len(c.posts)==1 and r['provider_usage']=={}
     assert r['semantic_quality_pass'] is False
     assert not (tmp_path/'job'/'semantic-proposed-spec.json').exists()
+
+
+def test_discovery_is_paginated_read_only_and_does_not_select():
+    class Discovery:
+        def __init__(self):self.calls=[]
+        def get(self,url,**kwargs):
+            self.calls.append((url,kwargs))
+            return Response(body={'models':[{'name':'models/unreviewed-model'}], 'nextPageToken':'next'}
+                if len(self.calls)==1 else {'models':[{'name':'models/'+g.MODEL,'supportedGenerationMethods':['generateContent']}]})
+    s=settings();c=Discovery();r=g.list_models(s,client=c)
+    assert r['pages']==2 and r['generation_requests']==0 and len(r['models'])==2
+    assert s.gemini_model==g.MODEL
+    assert c.calls[1][1]['params']['pageToken']=='next'
+    assert all(url=='https://generativelanguage.googleapis.com/v1beta/models' for url,_ in c.calls)
+    assert 'fake-secret' not in json.dumps(r)
+
+
+@pytest.mark.parametrize('mode',['http','transport','malformed','loop'])
+def test_discovery_failure_is_bounded_and_redacted(mode):
+    class Bad:
+        def get(self,*a,**kw):
+            if mode=='transport':raise httpx.ConnectError('fake-secret')
+            if mode=='http':return Response(403,{'error':'fake-secret'})
+            if mode=='malformed':return Response(body={'models':[None]})
+            return Response(body={'models':[], 'nextPageToken':'same'})
+    with pytest.raises(g.FreeTierBlocked) as e:g.list_models(settings(),client=Bad())
+    assert 'fake-secret' not in str(e.value)
+
+
+def test_explicit_legacy_profile_and_model_cache_isolation(tmp_path):
+    b,d,p=inputs(tmp_path);root=tmp_path/'job';c=Client(p)
+    g.analyze(b,d,{},root,settings(),authorized=True,client=c)
+    legacy=copy.deepcopy(p);legacy['model_version']='gemini-2.5-flash';c.proposal=legacy
+    s=settings(gemini_model='gemini-2.5-flash')
+    # New default cache cannot supply a legacy-model response or authorization.
+    r=g.analyze(b,d,{},root,s,client=c)
+    assert r['status']=='blocked' and len(c.posts)==1
+    r=g.analyze(b,d,{},root,s,authorized=True,client=c)
+    assert r['status']=='proposal_needs_inspection' and len(c.posts)==2
+    url,kw=c.posts[-1]
+    assert url.endswith('/gemini-2.5-flash:generateContent')
+    assert kw['json']['generationConfig']['thinkingConfig']=={'thinkingBudget':0}
+    assert kw['json']['generationConfig']['temperature']==0
+    assert g.verify_free_project(s,client=c)['model']=='gemini-2.5-flash'
+    # Even a valid other-model proposal fails the configured binding.
+    with pytest.raises(ValueError):g.validate_proposal(b,legacy,d,g.MODEL)
+
+
+def test_request_profile_isolated_and_unknown_alias_rejected():
+    first=g.generation_config(g.MODEL,8192);first['thinkingConfig']['thinkingLevel']='minimal'
+    assert g.generation_config(g.MODEL,8192)['thinkingConfig']['thinkingLevel']=='medium'
+    for model in ('gemini-flash-latest','gemini-3.8-flash-tts','gemini-4-argon'):
+        with pytest.raises(g.FreeTierBlocked):g.generation_config(model,8192)
 
 
 def test_billing_changed_before_retry_prevents_second_inference(tmp_path):
