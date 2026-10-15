@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     gemini_rpd:int=Field(default=20,ge=1,le=1000)
     gemini_tpm:int=Field(default=150000,ge=1000,le=1000000)
     gemini_max_frames:int=Field(default=80,ge=1,le=80)
+    gemini_frame_strategy:str=Field(default='baseline',pattern='^(baseline|evidence-preserving)$')
     gemini_max_output_tokens:int=Field(default=8192,ge=1024,le=16384)
     gemini_max_retries:int=Field(default=2,ge=0,le=2)
     gemini_backoff_cap_seconds:float=Field(default=30,ge=0,le=60)

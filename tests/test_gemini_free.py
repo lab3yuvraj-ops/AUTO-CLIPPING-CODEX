@@ -19,6 +19,8 @@ def prohibit_real_http(monkeypatch,tmp_path):
     monkeypatch.setattr(g,'PRICING_CHECKED',dt.datetime.now(dt.timezone.utc).date())
     reserve=g.reserve_quota
     monkeypatch.setattr(g,'reserve_quota',lambda folder,*a,**kw:reserve(tmp_path/'isolated-quota',*a,**kw))
+    next_slot=g.quota_next
+    monkeypatch.setattr(g,'quota_next',lambda folder,*a,**kw:next_slot(tmp_path/'isolated-quota',*a,**kw))
 
 
 def settings(**kw):
@@ -118,7 +120,7 @@ def test_official_request_grounding_cache_and_usage(tmp_path):
     url,kw=c.posts[0];assert url==g.API_URL and '?' not in url
     assert kw['headers']['x-goog-api-key']=='fake-secret'
     payload=kw['json'];assert 'tools' not in payload and 'cachedContent' not in payload
-    assert payload['generationConfig']['responseMimeType']=='application/json'
+    assert payload['generationConfig']['responseFormat']['text']['mimeType']=='application/json'
     assert payload['generationConfig']['thinkingConfig']=={'thinkingLevel':'medium'}
     assert 'temperature' not in payload['generationConfig']
     assert 'thinkingBudget' not in payload['generationConfig']['thinkingConfig']
@@ -167,9 +169,10 @@ def test_crop_warning_requires_review(tmp_path):
 def test_429_pauses_and_honors_retry_after_without_paid_fallback(tmp_path):
     b,d,p=inputs(tmp_path);c=Client(p,[Response(429,{}, {'Retry-After':'180'})])
     r=g.analyze(b,d,{},tmp_path/'job',settings(),authorized=True,client=c)
-    assert r['status']=='paused' and r['retry_after_seconds']==180 and len(c.posts)==1
+    assert r['status']=='paused' and r['retry_after_seconds']==pytest.approx(180,abs=.1) and len(c.posts)==1
     r=g.analyze(b,d,{},tmp_path/'job',settings(),authorized=True,client=c)
-    assert r['status']=='blocked' and len(c.posts)==1
+    assert r['status']=='paused' and len(c.posts)==1
+    assert r['next_admissible_at'] and r['retry_after_seconds']>0
 
 
 def test_bounded_exponential_backoff_reverifies_billing(tmp_path):
@@ -286,8 +289,94 @@ def test_explicit_legacy_profile_and_model_cache_isolation(tmp_path):
 def test_request_profile_isolated_and_unknown_alias_rejected():
     first=g.generation_config(g.MODEL,8192);first['thinkingConfig']['thinkingLevel']='minimal'
     assert g.generation_config(g.MODEL,8192)['thinkingConfig']['thinkingLevel']=='medium'
+    config=g.generation_config(g.MODEL,8192)
+    assert 'responseMimeType' not in config and 'responseJsonSchema' not in config
+    schema=config['responseFormat']['text']['schema']
+    def check(value):
+        if isinstance(value,dict):
+            assert not set(value)&{'$defs','$ref','const','exclusiveMinimum','exclusiveMaximum','minLength'}
+            for child in value.values():check(child)
+        elif isinstance(value,list):
+            for child in value:check(child)
+    check(schema)
+    assert g.generation_config('gemini-2.5-flash',8192)['responseJsonSchema']==schema
     for model in ('gemini-flash-latest','gemini-3.8-flash-tts','gemini-4-argon'):
         with pytest.raises(g.FreeTierBlocked):g.generation_config(model,8192)
+
+
+@pytest.mark.parametrize('issue,category',[
+    ('truncated','proposal_json'),('finish','finish_reason'),('missing_candidate','missing_candidate'),
+    ('wire_json','response_json'),('duplicate','proposal_json'),('nan','proposal_json'),
+    ('schema','schema'),('source','grounding'),('frame','grounding'),
+    ('anchor','grounding'),('coverage','grounding'),('model','grounding'),
+    ('uncertainty','grounding'),('oversize','response_size')])
+def test_private_exact_rejection_diagnostics(tmp_path,issue,category):
+    b,d,p=inputs(tmp_path)
+    if issue=='schema':p['scenes'][0]['subject_boxes'][0]['box']=[.5,.2,.2]
+    if issue=='source':p['source_sha256']='other'
+    if issue=='frame':p['scenes'][0]['evidence_frames']=['unknown']
+    if issue=='anchor':p['scenes'][0]['subject_boxes'][0]['t']=20
+    if issue=='coverage':p['scenes'][0]['end']=44
+    if issue=='model':p['model_version']='other'
+    if issue=='uncertainty':p['uncertainty']=['PRIVATE-STORY-DETAIL fake-secret fake-oauth']
+    text=json.dumps(p)
+    if issue=='truncated':text=text[:-5]
+    if issue=='duplicate':text='{"source_sha256":"source","source_sha256":"source"}'
+    if issue=='nan':text='{"x":NaN}'
+    body={'candidates':[{'finishReason':'MAX_TOKENS' if issue=='finish' else 'STOP','content':{'parts':[{'text':text}]}}]}
+    if issue=='missing_candidate':body={}
+    response=Response(body=body)
+    if issue=='wire_json':response.content=b'{'
+    if issue=='oversize':response.content=b' '*2_000_001
+    root=tmp_path/'job';c=Client(responses=[response])
+    r=g.analyze(b,d,{},root,settings(),authorized=True,client=c)
+    assert r['status']=='needs_review' and r['validation_category']==category
+    assert not (root/'semantic-proposed-spec.json').exists()
+    diagnostic=json.loads((root/r['private_diagnostic']/'diagnostic.json').read_text())
+    assert diagnostic['response_sha256']==hashlib.sha256(response.content).hexdigest()
+    assert diagnostic['model']==g.MODEL and diagnostic['request_configuration']['responseFormat']['text']['schema']
+    assert diagnostic['frames'][0][1]==d['frames'][0]['sha256'] and diagnostic['transcript_sha256']
+    if issue=='schema':
+        assert diagnostic['schema_errors'][0]['path']==['scenes',0,'subject_boxes',0,'box']
+        assert diagnostic['schema_errors'][0]['received']==[.5,.2,.2]
+    if issue=='source':assert diagnostic['grounding_error']=={'category':'source_binding','path':['source_sha256'],'expected':'source','received':'other'}
+    if issue=='finish':assert diagnostic['complete_json'] and diagnostic['finish_reason']=='MAX_TOKENS'
+    for f in root.rglob('*.json*'):
+        assert 'fake-secret' not in f.read_text() and 'fake-oauth' not in f.read_text()
+    assert 'PRIVATE-STORY-DETAIL' not in (root/'gemini-attempts.jsonl').read_text()
+    assert 'PRIVATE-STORY-DETAIL' not in json.dumps(r)
+
+
+def test_bom_whitespace_only_normalization_is_audited(tmp_path):
+    b,d,p=inputs(tmp_path);root=tmp_path/'job'
+    body={'candidates':[{'finishReason':'STOP','content':{'parts':[{'text':'\ufeff  '+json.dumps(p)+'\n'}]}}]}
+    r=g.analyze(b,d,{},root,settings(),authorized=True,client=Client(responses=[Response(body=body)]))
+    assert r['status']=='proposal_needs_inspection'
+    diagnostic=json.loads(next((root/'private-gemini').glob('*/diagnostic.json')).read_text())
+    assert diagnostic['normalization']['operation']=='outer_whitespace_and_bom_only'
+    assert not r['semantic_quality_pass']
+
+
+def test_quota_calculates_actual_slot_without_waiting_or_requests(tmp_path):
+    s=settings(gemini_rpm=1)
+    ledger={'requests':[{'at':100,'tokens':100}],'pause_until':0}
+    assert g.next_admissible(ledger,s,100,110)==160
+    ledger['pause_until']=190
+    assert g.next_admissible(ledger,s,100,110)==190
+    assert g.next_admissible(ledger,s,s.gemini_tpm+1,110) is None
+    assert g.next_admissible({'requests':[{'at':100,'tokens':100}],'pause_until':0},settings(gemini_rpd=1),100,110)==86500
+
+
+def test_503_at_one_rpm_pauses_until_real_window_without_short_sleep(tmp_path):
+    b,d,p=inputs(tmp_path);waits=[];c=Client(responses=[Response(503,{})])
+    original=g.quota_next
+    # reserve fixture isolates the ledger in tmp_path/isolated-quota.
+    g_next=lambda folder,*a,**kw:original(tmp_path/'isolated-quota',*a,**kw)
+    from unittest.mock import patch
+    with patch.object(g,'quota_next',g_next):
+        r=g.analyze(b,d,{},tmp_path/'job',settings(gemini_rpm=1),authorized=True,client=c,sleep=waits.append)
+    assert r['status']=='paused' and len(c.posts)==1 and waits==[]
+    assert 58<r['retry_after_seconds']<=60 and r['next_admissible_at']
 
 
 def test_billing_changed_before_retry_prevents_second_inference(tmp_path):
