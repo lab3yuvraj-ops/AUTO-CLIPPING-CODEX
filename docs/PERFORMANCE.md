@@ -67,7 +67,7 @@ Optional semantic assistance:
 .venv/Scripts/python.exe reel.py semantic-plan CLIP_JOB --base base.json --details selected-details.json
 ```
 
-It uses only an explicitly configured `SEMANTIC_VISION_URL` and `SEMANTIC_VISION_MODEL`; a local CPU vision server must be installed/configured separately. `SEMANTIC_VISION_API_KEY` stays private. Remote HTTPS also requires `SEMANTIC_ALLOW_REMOTE=true`; selected images/transcript leave the machine only with that opt-in. Endpoint/model pricing and CPU latency vary; no price or quality is promised. The response must match SceneTable, bind actual sampled-frame hashes and model version, and pass grounding/geometry checks. An uncertain response saves needs-review status and never invents a box. Output remains an unapproved proposal with `confirmed=false, unresolved=true`, requiring actual inspection before normal render guards allow publication.
+Superseded on16October: only the verified Gemini free-project adapter is supported. Legacy vision endpoints are rejected. See [GEMINI-FREE-TIER.md](GEMINI-FREE-TIER.md) for private key setup, read-only eligibility checks, explicit per-command inference authorization and mock-first benchmark procedure. Proposals remain unresolved and require every existing inspection guard. No real Gemini request has been run.
 
 For reproducible renderer replay use `tools/benchmark_render.py --source FILE --recipe EDIT.json --output NEW_FOLDER --renderer direct` and repeat with `--no-input-seek`. Never treat benchmark outputs as approved previews; do not reuse historical approval.
 
