@@ -213,6 +213,15 @@ def _review(ident,edit_path):
     path=job_path(ident);job=read(path);spec=read(Path(edit_path))
     from reel_engine.preflight import snap_spec,preflight
     from reel_engine.review_policy import register_round,save_policy
+    from reel_engine.review_policy import single_pass, spec_hash
+    previous=path.parent/'review-result.json'
+    if single_pass(job) and previous.exists():
+        result=read(previous)
+        if (result.get('preflight',{}).get('spec_sha256')==spec_hash(spec)
+            and result.get('review_engine_version')==engine_version()
+            and result.get('review_policy',{}).get('source_sha256')==job.get('source_sha256')):
+            return {**result,'cache_reused':True}
+        raise ValueError('The single visual pass is complete. Do not start an automatic correction/review loop; request an explicit revision instead.')
     spec=snap_spec(job['source'],spec,path.parent)
     register_round(path.parent,spec);save(Path(edit_path),spec)
     edit,tracking=prepare_edit(job,spec,path.parent)
@@ -307,14 +316,26 @@ def render(ident,edit_path,keep_lossless=False,threads=None):
 def _pre_render_review_guard(job,spec,edit,tracking,root):
     from reel_engine.preflight import preflight,crop_review_flags
     from reel_engine.review_policy import register_round,inspection_plan,save_policy
+    from reel_engine.review_policy import single_pass,spec_hash
     register_round(root,spec)
-    checks=preflight(job['source'],spec,edit,tracking,root,settings.crop_safety_margin)
+    saved_result=read(root/'review-result.json') if (root/'review-result.json').exists() else {}
+    if single_pass(job):
+        checks=saved_result.get('preflight',{})
+        if digest(Path(job['source']))!=job.get('source_sha256'):
+            raise ValueError('Source changed after the single visual pass; saved verification cannot be reused.')
+        if (checks.get('spec_sha256')!=spec_hash(spec) or checks.get('source_sha256')!=job.get('source_sha256')
+            or saved_result.get('review_engine_version')!=engine_version()):
+            raise ValueError('Complete the one pre-render visual pass for this exact source/spec before rendering.')
+    else:
+        checks=preflight(job['source'],spec,edit,tracking,root,settings.crop_safety_margin)
     job['crop_action_warnings']=checks.get('crop_safety',{}).get('action_summary',[])
     tracking['editorial_warnings']=[*tracking.get('editorial_warnings',[]),*checks.get('editorial_warnings',[])]
     tracking['flagged_output_seconds']=sorted(set(tracking.get('flagged_output_seconds',[])+crop_review_flags(checks)))
     policy=save_policy(root,job,spec,checks);job['review_policy']=policy
     save(root/'job.json',job)
-    if not checks['passed']:raise ValueError('Pre-render boundary/crop check failed. Inspect preflight.json; no render started.')
+    if not checks['passed'] and not single_pass(job):raise ValueError('Pre-render boundary/crop check failed. Inspect preflight.json; no render started.')
+    if single_pass(job) and not checks['passed']:
+        tracking['editorial_warnings'].append('Single-pass policy: visual crop/boundary flags retained without a correction loop; see preflight.json.')
     reviewed=read(root/'review'/'review.json') if (root/'review'/'review.json').exists() else {}
     result=read(root/'review-result.json') if (root/'review-result.json').exists() else {}
     if (result.get('preflight',{}).get('spec_sha256')!=checks['spec_sha256']
@@ -369,12 +390,16 @@ def _render(ident,edit_path,keep_lossless=False,threads=None):
     job['editorial_warnings']=[*job.get('passage_classification',{}).get('editorial_warnings',[]),*tracking.get('editorial_warnings',[])]
     if job.get('fast'):
         job['caption_coverage']=read(root/'skipped-words.json')
-    from reel_engine.final_review import sample_final
     job['review_strategy']=job['review_policy']['policy']
-    from reel_engine.timing import stage
-    with stage(STATE,job.get('timing_job',ident),'final_sampling_'+ident[-5:],run_id=job.get('run_id')) as interval:
-        job['final_mp4_review']=sample_final(video,edit,tracking,root)
-        interval['cached']=job['final_mp4_review']['cache_reused']
+    from reel_engine.review_policy import single_pass
+    if single_pass(job):
+        job['final_mp4_review']={'performed':False,'reason':'User requested one pre-render visual pass and no post-render screenshots. Technical validation still ran.','publication_approved':False}
+    else:
+        from reel_engine.final_review import sample_final
+        from reel_engine.timing import stage
+        with stage(STATE,job.get('timing_job',ident),'final_sampling_'+ident[-5:],run_id=job.get('run_id')) as interval:
+            job['final_mp4_review']=sample_final(video,edit,tracking,root)
+            interval['cached']=job['final_mp4_review']['cache_reused']
     job.pop('approval',None);save(path,job);return job
 def publish(ident,confirmed=False):
     path=job_path(ident);job=read(path)

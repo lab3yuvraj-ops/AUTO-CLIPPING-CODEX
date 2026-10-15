@@ -1,3 +1,15 @@
+# Transcript-first preparation and single visual pass (2026-10-16)
+
+Latest policy supersedes the historical whole-proxy/full-transfer and repeated/final image-review descriptions below for new default jobs. No existing job, completed output, model or approval is migrated/deleted.
+
+`reel_engine/transcript_first.py` is the default YouTube analyze orchestrator (TRANSCRIPT_FIRST=true). It resolves metadata and retrieves native uploaded/auto caption drafts before transferring any video. Missing captions use validated complete **audio only**, local base/tiny CPU/int8 draft, never whole-video transfer. Caption cues remain selection-only. After transcript selection, the existing `fast-prepare` command dispatches into the shared section/verified-word engine: highest-quality chosen ranges plus 3s padding, small/beam5 selected verification, start/end audio anchor checks, and section-local fallback verification when offsets fail. Selected video only supplies visual planning/detail frames. No whole-source visual overview is available on this route; this is a deliberate tradeoff requested by the user. Transcript-only ranking may miss a stronger visual moment elsewhere.
+
+Caption success still needs a separate audio-only reference for source-to-section timing anchors. The audio can cover the full source, but video downloads cover only chosen passages plus padding/keyframe pre-roll. Section transfer failures stop with preserved artifacts; they never trigger an automatic full-video fallback. Explicit --full-source and TRANSCRIPT_FIRST=false retain the old authorized recovery/legacy paths. No caption endpoint retry loop is introduced.
+
+New child jobs store review_mode=single-pass (SINGLE_PASS_REVIEW=true). Visual identity is explicitly undecided until selected footage is inspected; audio does not assign screen sides. Pre-render checks run once and one compact baseline/flagged-page visual pass is recorded. Minor crop/motion/shot-change defects remain warnings and are accepted without an automatic correction loop. This policy does not certify semantic quality. Rendering verifies that the source hash, spec hash, engine version and inspected pages still match, reuses the check receipt, and does not rerun preflight or extract post-render screenshots. Technical MP4/word-event/audio validation remains; exact-preview approval still gates publishing. Reinvoking review for the same recipe reuses its result; a changed recipe requires an explicit separate revision rather than an automatic correction loop. Legacy saved jobs retain their original policies and tests.
+
+No dependency, API, GPU, caption typography/animation, easing, output format or CTA change. Fresh end-to-end speed gains have not yet been measured; offline tests cover orchestration and safeguards.
+
 # Performance branch additions (2026-10-15)
 
 These changes are on `performance-optimization`, not main. Existing review, caption/word, full-height crop, CTA and publication approval guards remain enforced.

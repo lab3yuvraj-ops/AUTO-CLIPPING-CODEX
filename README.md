@@ -2,6 +2,12 @@
 
 # AUTO CLIPPING
 
+### Current default: transcript first, selected video only
+
+`reel.py analyze --url URL --clips 1` now prepares a caption draft or local audio-only transcription before downloading video. After Codex selects a complete 30–60s story, `reel.py fast-prepare JOB --selection SELECTION.json` downloads only that passage plus 3s padding and verifies its words/timing. Full audio may be used for transcription and section-offset anchors; no full video/proxy is needed. Section errors stop rather than silently downloading the whole video.
+
+New jobs use one pre-render visual review, accept reported minor visual defects without correction loops, render once, and do not generate post-render screenshots. Captions, camera style, CTA, technical validation and approval of the exact preview before Instagram publishing remain. These settings are `TRANSCRIPT_FIRST=true` and `SINGLE_PASS_REVIEW=true`. Older workflow examples below describe the retained legacy routes; follow this paragraph for new default YouTube jobs. No fresh speed target has yet been measured for this change.
+
 Create reviewed vertical clips from YouTube videos, working interactively in Codex with a local Python/FFmpeg pipeline. Supply a URL, choose one or two clips, review the actual MP4s, then approve any Instagram post through your own Zernio account.
 
 ## Start here

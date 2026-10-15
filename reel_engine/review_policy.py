@@ -26,9 +26,19 @@ def record_inspection(root,phase,pages):
 def spec_hash(spec):return hashlib.sha256(json.dumps(spec,sort_keys=True).encode()).hexdigest()
 
 
+def single_pass(job):
+    return job.get('review_mode')=='single-pass'
+
+
 def choose_policy(job,spec,checks):
     """Conservative source-scoped review; narration alone never removes identity review."""
     tracking=spec.get('tracking',{})
+    if single_pass(job):
+        return {'policy':'single-pass','reason':'User requested one compact pre-render visual pass, accepting minor visual defects without correction/review loops.',
+            'full_first_pass':False,'pre_render_zero_flags':bool(checks.get('passed')),
+            'baseline_required':True,'later_rounds':'none; explicit user revision only','correction_cap':0,
+            'spec_sha256':spec_hash(spec),'source_sha256':job.get('source_sha256'),
+            'final_review':'No post-render screenshot inspection. Technical checks and exact-preview publication approval retained.'}
     evidence=spec.get('candidate',{}).get('passage_evidence') or job.get('original_candidate',{}).get('passage_evidence',{})
     classification=job.get('passage_classification',{})
     kind=evidence.get('classification') or classification.get('classification')
