@@ -230,12 +230,20 @@ def prepare_selected(state,job,selection_path,normal_analyze=None):
     from .fast_download import download_section,section_range,confirm_section_audio
     from .local_transcription import verify_passages
     root=Path(state)/'jobs'/job['id'];run=job['run_id'];selection=_read(selection_path)
-    if not job.get('fast_eligible') or not _read(root/'fast-gate.json').get('eligible'):raise ValueError('Fast preparation requires the accepted evidence gate.')
-    proxy=job['proxy']
+    transcript_first=job.get('transcript_first',False)
+    if not transcript_first and (not job.get('fast_eligible') or not _read(root/'fast-gate.json').get('eligible')):raise ValueError('Fast preparation requires the accepted evidence gate.')
+    proxy=job['audio_reference'] if transcript_first else job['proxy']
     if file_hash(proxy['source'])!=proxy['source_sha256']:raise ValueError('Proxy changed after eligibility review.')
     from .passage_gate import classify_selection,require_selected_review
-    require_selected_review(root,selection,proxy['source_sha256'])
-    classifications=preparation_classifications(selection,{**job,'source_sha256':proxy['source_sha256']})
+    if transcript_first:
+        classifications=[{'eligible':True,'classification':'unreviewed selected footage',
+            'crop_strategy':'fixed','diarization_required':False,
+            'careful_identity_review_required':True,'editorial_warnings':[],
+            'reason':'Visual identity is pending the one selected-footage review; audio labels do not establish screen identity.',
+            'range':[c['start'],c['end']]} for c in selection['candidates']]
+    else:
+        require_selected_review(root,selection,proxy['source_sha256'])
+        classifications=preparation_classifications(selection,{**job,'source_sha256':proxy['source_sha256']})
     if not all(r['eligible'] for r in classifications):raise ValueError('Animated or undecidable selected passage requires careful-pipeline review; fast mode is not forced.')
     atomic_json(root/'passage-classifications.json',classifications)
     skip_flags=[not r['diarization_required'] for r in classifications]
@@ -265,6 +273,9 @@ def prepare_selected(state,job,selection_path,normal_analyze=None):
         with stage(state,job['id'],'section_metadata',run_id=run):
             info=json.loads(youtube.ytdlp(['--dump-single-json','--skip-download',f"https://www.youtube.com/watch?v={job['video_id']}"]))
         from .fast_download import sections_or_full
+        if transcript_first:
+            with stage(state,job['id'],'section_download',run_id=run):
+                return [download_section(info,root/'sections'/f'clip-{i+1}',a,b,duration) for i,(a,b) in enumerate(ranges)]
         return sections_or_full(info,root,ranges,duration,
             full_download=lambda:youtube.download(SimpleNamespace(video_id=job['video_id'],config={'min_source_height':settings.min_source_height},created=job['created']),root/'full-fallback',info=info,no_retries=True),
             timing_hook=lambda name:stage(state,job['id'],name,run_id=run))
@@ -272,8 +283,9 @@ def prepare_selected(state,job,selection_path,normal_analyze=None):
         from .detail import make_details
         with stage(state,job['id'],'dense_frame_extraction',run_id=run):return make_details(proxy['source'],root/'preparation-details',padded)
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
-        vf=pool.submit(verify);sf=pool.submit(sections);df=pool.submit(dense)
-        verification=vf.result();media=sf.result();dense_report=df.result()
+        vf=pool.submit(verify);sf=pool.submit(sections)
+        df=None if transcript_first else pool.submit(dense)
+        verification=vf.result();media=sf.result();dense_report=df.result() if df else {'route':'selected final sections only; no whole-video proxy','passages':[]}
     verified=_read(verification['verified_passages']);passages=[next(p for p in verified['passages'] if p['range']==bounds) for bounds in padded]
     attention={'passages':[{'range':p['range'],'low_confidence_words':[w for w in p['words'] if w.get('confidence',0)<.6 or w['end']<=w['start'] or w['end']-w['start']>1.5]} for p in passages],'policy':'Fast rechecks restricted to flagged speech; local word IDs required.'}
     atomic_json(root/'speech-attention.json',attention)
@@ -312,7 +324,21 @@ def prepare_selected(state,job,selection_path,normal_analyze=None):
         child.update(crop_strategy=classification['crop_strategy'],passage_classification=classification,editorial_warnings=classification['editorial_warnings'])
         child=save_clip_record(folder,child);atomic_json(folder/'verification-route.json',{'route':route,'offset_check':check,'proxy_timings_used':True,'source_time_offset':offset,'word_timings_reused':bool(p.get('timings',{}).get('full_source_asr_reused'))});clips.append(child)
         atomic_json(folder/'speech-attention.json',{'passages':[{'range':local_range,'low_confidence_words':[w for w in words if w.get('confidence',0)<.6 or w['end']<=w['start'] or w['end']-w['start']>1.5]}],'policy':attention['policy']})
-    job.update(status='Fast clips awaiting edit',clips=[{'id':c['id'],'status':c['status']} for c in clips]);atomic_json(root/'job.json',job)
+    if transcript_first:
+        from .detail import make_details
+        for child in clips:
+            folder=Path(state)/'jobs'/child['id']
+            child['transcript_first']=True
+            child['review_mode']='single-pass' if settings.single_pass_review else 'careful'
+            # Dense visual evidence is generated only for the downloaded passage.
+            bounds=child.get('candidate_local') or {'start':0,'end':float(probe(child['source'])['format']['duration'])}
+            with stage(state,job['id'],'selected_frames_'+child['id'][-5:],run_id=run):
+                detail=make_details(child['source'],folder,[(bounds['start'],bounds['end'])],adaptive=settings.adaptive_details,mode=settings.processing_mode)
+            atomic_json(folder/'selected-details.json',detail)
+            child['details']=str((folder/'selected-details.json').resolve())
+            atomic_json(folder/'job.json',child)
+            dense_report['passages'].append(detail)
+    job.update(status='Clips awaiting edit',clips=[{'id':c['id'],'status':c['status']} for c in clips]);atomic_json(root/'job.json',job)
     from .speech_worker import request
     request(root,run,'stop')
     return {'job':job['id'],'clips':clips,'verification':verification,'dense_proxy_frames':dense_report,'parallel_budget':parallel_budget()}

@@ -516,7 +516,11 @@ def main():
                 if use_section_preparation(args.file,args.full_local,args.full_source):
                     from reel_engine.fast import analyze_fast
                     pinned=args.url or 'https://www.youtube.com/watch?v='+latest()[0]
-                    result=analyze_fast(STATE,pinned,args.clips,fresh=args.fresh,stop_on_rejection=args.stop_on_fast_rejection,normal_analyze=analyze,fresh_captions=args.fresh_captions,caption_max_attempts=args.caption_attempts,careful_sections=not args.fast)
+                    if settings.transcript_first:
+                        from reel_engine.transcript_first import analyze as transcript_analyze
+                        result=transcript_analyze(STATE,pinned,args.clips,fresh=args.fresh,fresh_captions=args.fresh_captions,fast=args.fast)
+                    else:
+                        result=analyze_fast(STATE,pinned,args.clips,fresh=args.fresh,stop_on_rejection=args.stop_on_fast_rejection,normal_analyze=analyze,fresh_captions=args.fresh_captions,caption_max_attempts=args.caption_attempts,careful_sections=not args.fast)
                 else:
                     if args.fast or args.sections:print('Fast mode is for original-caption YouTube footage; using the normal pipeline.',flush=True)
                     result=analyze(args.url,args.file,args.clips,args.full_local)
@@ -546,10 +550,15 @@ def main():
                 result=gate(STATE,read(job_path(args.job)),args.evidence,normal_analyze=analyze)
             elif args.command=='fast-prepare':
                 from reel_engine.fast import prepare_selected
-                result=prepare_selected(STATE,read(job_path(args.job)),args.selection,normal_analyze=analyze)
+                job=read(job_path(args.job))
+                if job.get('transcript_first'):
+                    from reel_engine.transcript_first import prepare as transcript_prepare
+                    result=transcript_prepare(STATE,job,args.selection)
+                else:result=prepare_selected(STATE,job,args.selection,normal_analyze=analyze)
             elif args.command=='fast-details':
                 from reel_engine.detail import make_details
                 job=read(job_path(args.job));selection=read(Path(args.selection))
+                if job.get('transcript_first'):raise ValueError('Transcript-first jobs use fast-prepare directly after selection; no whole-video proxy/details pass is needed.')
                 cues=read(Path(job['transcript'])).get('cues',[]) if job.get('transcript') else []
                 result=make_details(job['source'],job_path(args.job).parent,[(c['start'],c['end']) for c in selection['candidates']],
                     adaptive=settings.adaptive_details,mode=settings.processing_mode,context_times=[c['start'] for c in cues])

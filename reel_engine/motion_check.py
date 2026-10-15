@@ -91,6 +91,9 @@ def for_job(spec,root):
                 'unavailable':reason,'review_fallback':'Inspect each scene because proxy motion triage is unavailable.'}
     if not jobpath.exists():return unavailable('No proxy job record')
     job=json.loads(jobpath.read_text(encoding='utf-8'));parent=root.parent/job.get('source_job_id','')/'job.json'
+    if job.get('transcript_first'):
+        from .config import settings
+        return check_motion(job['source'],spec,root,0,settings.motion_check_interval)
     if job.get('source_job_id') and job.get('source_time_offset') is None:
         return unavailable('Proxy-to-final offset is unverified; inspect final-source scene frames')
     if not parent.is_file():return unavailable('No source proxy record; geometric preflight still applies')

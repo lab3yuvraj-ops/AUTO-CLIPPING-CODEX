@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     full_download_max_bytes:int=Field(default=1500000000,gt=0)
     section_download_min_height:int=Field(default=2160,ge=1080)
     download_mode:str=Field(default='auto',pattern='^(auto|selected-sections)$')
+    transcript_first:bool=True
+    single_pass_review:bool=True
     compact_pre_review:bool=True
     processing_mode:str=Field(default='smart',pattern='^(fast|smart)$')
     adaptive_details:bool=True
