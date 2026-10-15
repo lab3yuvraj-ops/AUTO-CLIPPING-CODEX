@@ -305,6 +305,8 @@ def render(ident,edit_path,keep_lossless=False,threads=None):
     return _render(ident,edit_path,keep_lossless,threads)
 
 def _pre_render_review_guard(job,spec,edit,tracking,root):
+    if tracking.get('semantic_review_required') and (tracking.get('confirmed') is not True or tracking.get('unresolved') is not False):
+        raise ValueError('Gemini semantic proposal is unreviewed/unresolved. Establish visual evidence before preflight/render; confidence is not approval.')
     from reel_engine.preflight import preflight,crop_review_flags
     from reel_engine.review_policy import register_round,inspection_plan,save_policy
     register_round(root,spec)
@@ -441,7 +443,8 @@ def main():
     p=sub.add_parser('fast-prepare');p.add_argument('job');p.add_argument('--selection',required=True)
     p=sub.add_parser('fast-details');p.add_argument('job');p.add_argument('--selection',required=True)
     p=sub.add_parser('plan-check');p.add_argument('job');p.add_argument('--edit',required=True)
-    p=sub.add_parser('semantic-plan');p.add_argument('job');p.add_argument('--base',required=True);p.add_argument('--details',required=True)
+    p=sub.add_parser('semantic-plan');p.add_argument('job');p.add_argument('--base',required=True);p.add_argument('--details',required=True);p.add_argument('--authorize-gemini',action='store_true',help='Explicitly authorize a bounded free-project semantic request; management checks still required.')
+    p=sub.add_parser('gemini-verify');p.add_argument('--confirm-free-tier',action='store_true',help='Confirm AI Studio Free plan/model/quotas. Read-only management checks; no Gemini inference.')
     p=sub.add_parser('doctor')
     p=sub.add_parser('performance-report');p.add_argument('job')
     args=parser.parse_args();STATE.mkdir(exist_ok=True)
@@ -470,17 +473,31 @@ def main():
             elif args.command=='performance-report':
                 from reel_engine.performance import summarize
                 result=summarize(job_path(args.job).parent)
+            elif args.command=='gemini-verify':
+                from reel_engine.gemini_free import verify_free_project
+                if not args.confirm_free_tier:raise ValueError('Confirm the exact key project/model shows Free and active limits in AI Studio; then --confirm-free-tier.')
+                settings.gemini_free_tier_confirmed=True
+                result=verify_free_project(settings)
+                save(STATE/'gemini-free-tier-verification.json',result)
             elif args.command=='plan-check':
                 from reel_engine.editing_plan import save_plan
                 result=save_plan(job_path(args.job).parent,read(job_path(args.job)),read(Path(args.edit)),backend=settings.render_backend,preset=settings.x264_preset)
             elif args.command=='semantic-plan':
                 from reel_engine.semantic_analysis import analyze as semantic_analyze
-                job=read(job_path(args.job));details=read(Path(args.details))
+                from reel_engine.timing import stage
+                job=read(job_path(args.job));details=read(Path(args.details));base=read(Path(args.base))
                 if 'passages' in details:
-                    base=read(Path(args.base));details=next(p for p in details['passages'] if p['range'][0]<=base['candidate']['start'] and base['candidate']['end']<=p['range'][1])
-                result=semantic_analyze(read(Path(args.base)),details,read(Path(job['transcript'])),job_path(args.job).parent,
-                    endpoint=settings.semantic_vision_url,model=settings.semantic_vision_model,key=settings.semantic_vision_api_key,allow_remote=settings.semantic_allow_remote)
-                result={k:v for k,v in result.items() if k not in ('provider_usage','proposal')}
+                    details=next(p for p in details['passages'] if p['range'][0]<=base['candidate']['start'] and base['candidate']['end']<=p['range'][1])
+                a,b=base['candidate']['start'],base['candidate']['end']
+                details={**details,'frames':[f for f in details['frames'] if a<=f['source_seconds']<=b],
+                         'source_width':job.get('metadata',{}).get('width'),'source_height':job.get('metadata',{}).get('height')}
+                selected_transcript={'words':[{k:w.get(k) for k in ('start','end','text','speaker')} for w in base['words']],
+                                     'source_time':True,'wording_is_not_a_visual_identity':True}
+                with stage(STATE,job.get('timing_job',args.job),'gemini_semantic_analysis',run_id=job.get('run_id')) as interval:
+                    result=semantic_analyze(base,details,selected_transcript,job_path(args.job).parent,settings=settings,authorized=args.authorize_gemini)
+                    interval['cached']=result.get('cache_reused',False)
+                    interval['outcome']=result['status']
+                result={k:v for k,v in result.items() if k!='proposal'}
             elif args.command=='connect':result=connect(args.channel)
             elif args.command=='onboarding':
                 from reel_engine.onboarding import onboard

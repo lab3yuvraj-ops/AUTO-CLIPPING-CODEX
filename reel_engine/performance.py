@@ -52,6 +52,11 @@ def summarize(root):
     root=Path(root)
     path=Path(root)/'performance-metrics.jsonl'
     records=[json.loads(line) for line in path.read_text(encoding='utf8').splitlines() if line.strip()] if path.exists() else []
+    semantic_path=root/'gemini-attempts.jsonl'
+    semantic=[json.loads(line) for line in semantic_path.read_text(encoding='utf8').splitlines() if line.strip()] if semantic_path.exists() else []
+    semantic_usage={}
+    for record in semantic:
+        for key,value in record.get('provider_usage',{}).items():semantic_usage[key]=semantic_usage.get(key,0)+value
     rounds=root/'correction-rounds.json';reviews=root/'interactive-phases.jsonl'
     versions=json.loads(rounds.read_text(encoding='utf8')).get('versions',[]) if rounds.exists() else []
     passes=[json.loads(line) for line in reviews.read_text(encoding='utf8').splitlines() if line.strip()] if reviews.exists() else []
@@ -61,7 +66,14 @@ def summarize(root):
         if p.exists():
             d=json.loads(p.read_text(encoding='utf8'));artifacts[name]={'pages':len(d.get('pages',[])),'samples':len(d.get('samples',d.get('sample_seconds',[]))),
                 'cache_reused':d.get('cache_reused'),'scope':'Most recent artifact, not historical frame-view count'}
-    return {'records':records,'full_render_attempts':sum(r['full_render_attempts'] for r in records),
+    return {'records':records,'gemini':{'invocations':len(semantic),
+            'inference_calls':sum(r.get('api_calls_this_run',0) for r in semantic),
+            'management_requests':sum(r.get('management_requests',0) for r in semantic),
+            'api_latency_seconds':sum(r.get('api_latency_seconds',0) for r in semantic),
+            'backoff_seconds':sum(r.get('backoff_seconds',0) for r in semantic),
+            'cache_hits':sum(bool(r.get('cache_reused')) for r in semantic),'provider_usage':semantic_usage,
+            'estimated_api_cost':sum(r.get('estimated_api_cost',0) for r in semantic),
+            'quality_pass_claimed':False},'full_render_attempts':sum(r['full_render_attempts'] for r in records),
             'correction_rounds':max(0,len(versions)-1),'review_phases_completed':sum(p.get('phase')=='review_pass' and p.get('event')=='end' for p in passes),
             'review_artifacts':artifacts,
             'peak_rss_bytes_sampled':max((r.get('peak_rss_bytes_sampled') or 0 for r in records),default=0) or None,

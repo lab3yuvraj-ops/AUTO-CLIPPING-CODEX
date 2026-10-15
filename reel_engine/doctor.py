@@ -16,7 +16,10 @@ def check(root,settings):
     return {'supported_platform':platform.system()=='Windows','python':platform.python_version(),
             'missing_packages':missing,'tools':tools,'assets':assets,'cpu_only':settings.local_device=='cpu',
             'instagram_configured':bool(settings.zernio_api_key and settings.zernio_instagram_id),
-            'semantic_vision_configured':bool(settings.semantic_vision_url and settings.semantic_vision_model),
+            'semantic_vision_configured':bool(getattr(settings,'gemini_enabled',False) and getattr(settings,'gemini_api_key','')),
+            'semantic_provider':'gemini-free-project-only',
+            'gemini_free_tier_verified':False,
+            'gemini_verification_note':'Doctor is offline. Key presence does not establish free tier; use gemini-verify and confirm AI Studio plan before inference.',
             'whisper_model_cached':cached,'ready_for_media_tools':tools_ready,
             'ready_for_media':tools_ready and cached,
             'note':'Readiness is not successful model loading, YouTube access or account verification. No requests or downloads were made.'}
