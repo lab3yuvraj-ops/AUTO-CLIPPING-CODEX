@@ -60,7 +60,7 @@ def analyze_fast(state,url,clips,*,fresh=False,stop_on_rejection=False,normal_an
         job['metadata']={k:info.get(k) for k in ('id','title','duration','channel_id','upload_date','width','height','fps')}
         job['highest_height']=max((f.get('height') or 0 for f in info.get('formats',[]) if f.get('vcodec') not in (None,'none')),default=0)
         from .download_policy import choose_download
-        policy=choose_download(info,settings.full_download_max_bytes,settings.section_download_min_height)
+        policy=choose_download(info,settings.full_download_max_bytes,settings.section_download_min_height,settings.download_mode)
         job['download_policy']=policy;atomic_json(root/'download-policy.json',policy)
         atomic_json(path,job)
         import threading

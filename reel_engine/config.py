@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     selection_draft_model:str=Field(default='base',pattern='^(base|tiny)$')
     full_download_max_bytes:int=Field(default=1500000000,gt=0)
     section_download_min_height:int=Field(default=2160,ge=1080)
+    download_mode:str=Field(default='auto',pattern='^(auto|selected-sections)$')
     compact_pre_review:bool=True
     processing_mode:str=Field(default='smart',pattern='^(fast|smart)$')
     adaptive_details:bool=True
