@@ -23,9 +23,9 @@ def download_audio(info, root):
             return {**saved,'cached':True}
         raise ValueError('Audio reference changed; preserve it and use a fresh job.')
     youtube.ytdlp([*youtube.transfer_options(root),'-f','bestaudio','--retries','0',
-        '--fragment-retries','0','--extractor-retries','0','--continue','-o',str(root/'audio.%(ext)s')],
+        '--fragment-retries','0','--extractor-retries','0','--continue','-o',str(root/'source.%(ext)s')],
         timeout=900,info=info,progress_root=root)
-    files=[p for p in root.glob('audio.*') if p.suffix in ('.m4a','.webm','.ogg','.opus','.mp3','.mkv')]
+    files=[p for p in root.glob('source.*') if p.suffix in ('.m4a','.webm','.ogg','.opus','.mp3','.mkv')]
     if len(files)!=1:raise ValueError('Audio-only transfer did not produce one accepted file.')
     data=probe(files[0]);duration=float(data['format']['duration'])
     if any(s.get('codec_type')=='video' for s in data['streams']) or not any(s.get('codec_type')=='audio' for s in data['streams']) or abs(duration-float(info['duration']))>2:
@@ -102,5 +102,9 @@ def prepare(state,job,selection_path):
             info=json.loads(youtube.ytdlp(['--dump-single-json','--skip-download',f"https://www.youtube.com/watch?v={job['video_id']}"]))
         with stage(state,job['id'],'audio_only_download',run_id=run):
             job['audio_reference']=download_audio(info,root/'audio-reference')
-        atomic_json(root/'job.json',job)
+    audio=job['audio_reference']
+    # The authenticated speech worker verifies the source against this job.
+    # Bind the audio reference explicitly; it is never final render footage.
+    job.update(source=audio['source'],source_sha256=audio['source_sha256'],media_kind='audio-reference')
+    atomic_json(root/'job.json',job)
     return prepare_selected(state,job,selection_path)

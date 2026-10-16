@@ -36,7 +36,7 @@ def test_caption_failure_uses_audio_only_draft_once(tmp_path,monkeypatch):
 
 def test_audio_transfer_never_requests_video_and_validates_streams(tmp_path,monkeypatch):
     calls=[]
-    def download(args,**kw):calls.append(args);(tmp_path/'audio.webm').write_bytes(b'audio')
+    def download(args,**kw):calls.append(args);(tmp_path/'source.webm').write_bytes(b'audio')
     monkeypatch.setattr(workflow.youtube,'ytdlp',download)
     monkeypatch.setattr(workflow.youtube,'transfer_options',lambda *a:[])
     monkeypatch.setattr(workflow,'probe',lambda *a:{'format':{'duration':900},'streams':[{'codec_type':'audio'}]})
@@ -44,6 +44,21 @@ def test_audio_transfer_never_requests_video_and_validates_streams(tmp_path,monk
     assert calls[0][calls[0].index('-f')+1]=='bestaudio'
     assert result['render_eligible'] is False
     assert workflow.download_audio(INFO,tmp_path)['cached'] and len(calls)==1
+    assert Path(calls[0][calls[0].index('-o')+1]).name=='source.%(ext)s'
+
+
+def test_prepare_binds_audio_hash_before_real_verification(tmp_path,monkeypatch):
+    from reel_engine import fast
+    root=tmp_path/'jobs'/'abcdefghijk-transcript';root.mkdir(parents=True)
+    audio=tmp_path/'audio.webm';audio.write_bytes(b'audio')
+    job={'id':root.name,'run_id':'run','audio_reference':{'source':str(audio),'source_sha256':fast.file_hash(audio)}}
+    def prepare(state,bound,selection):
+        saved=json.loads((root/'job.json').read_text())
+        assert saved['source_sha256']==fast.file_hash(audio)==bound['source_sha256']
+        assert saved['source']==str(audio) and saved['media_kind']=='audio-reference'
+        return {'verified':True}
+    monkeypatch.setattr(fast,'prepare_selected',prepare)
+    assert workflow.prepare(tmp_path,job,'selection.json')['verified']
 
 
 def selected_fixture(tmp_path,monkeypatch,fail=False):
