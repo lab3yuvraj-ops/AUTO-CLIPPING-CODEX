@@ -12,11 +12,23 @@ from pathlib import Path
 
 import numpy as np
 from scipy.signal import correlate
+from functools import lru_cache
 
 from .errors import StageError
 from .render import probe, file_hash
 from .youtube import ytdlp, transfer_options
 from .youtube_transcript import atomic_json
+
+
+@lru_cache(maxsize=1)
+def section_http_args():
+    args='ffmpeg_i:-rw_timeout 15000000 -short_seek_size 1'
+    # Bound each HTTP range rather than leaving a request open to file EOF.
+    # Older student FFmpeg builds retain their supported transport options.
+    help_result=subprocess.run(['ffmpeg','-hide_banner','-h','protocol=https'],capture_output=True,text=True,timeout=10)
+    if '-request_size ' in help_result.stdout and '-initial_request_size ' in help_result.stdout:
+        args+=' -request_size 1048576 -initial_request_size 1048576'
+    return args
 
 
 def section_range(start, end, duration, padding=3):
@@ -133,7 +145,7 @@ def download_section(info, root, start, end, source_duration, padding=3, *, loss
     # A positive 1-byte threshold forces range seeks instead of whole-stream
     # readahead; this changes transport only, never source pixels or encoding.
     cut_options=['--force-keyframes-at-cuts','--downloader-args','ffmpeg_o:-c:v libx264 -preset ultrafast -crf 0 -c:a flac'] if lossless_cut else []
-    ytdlp([*options, '--downloader-args','ffmpeg_i:-rw_timeout 15000000 -short_seek_size 1',*cut_options,
+    ytdlp([*options, '--downloader-args',section_http_args(),*cut_options,
            '--retries','0','--fragment-retries','0','--extractor-retries','0','-f', 'bv*+ba/b', '--download-sections', f'*{bounds[0]:.6f}-{bounds[1]:.6f}',
            '--merge-output-format', 'mkv', '--remux-video', 'mkv', '--continue',
            '--abort-on-unavailable-fragments', '--max-filesize', '12G',

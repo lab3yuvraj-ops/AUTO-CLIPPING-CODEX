@@ -69,3 +69,5 @@ Use `tools/build_release.py` to prepare an allowlisted student export. It scans 
 ```
 
 Tests cover downloader bounds, caption caching/fallback, selected verification, identity gates, crop/action safety, review/hash carry-over, timing and publication safeguards. Tests do not establish perfect semantic identity, wording or lip sync on unseen footage. YouTube availability, throttling, cookies, account permissions, hardware and required editorial corrections can block or slow a run. No fixed completion-time guarantee is made. A fresh clone has not been independently benchmarked on every student's machine.
+
+For a stalled selected-section transfer, an explicit bounded recovery is available: `python reel.py fast-prepare JOB --selection SELECTION.json --recover-section`. It preserves partials and verified speech, downloads only the selected range losslessly, and checks source audio anchors again. It does not download the full video. See ARCHITECTURE.md.

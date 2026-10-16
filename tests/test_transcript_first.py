@@ -120,3 +120,16 @@ def test_preparation_reuses_in_memory_metadata_without_another_fetch(tmp_path,mo
     assert result['clips'] and calls==[(120.,155.)]
 
 
+def test_explicit_recovery_uses_separate_lossless_range_folder(tmp_path,monkeypatch):
+    from reel_engine import fast_download
+    fast,job,selection,calls=selected_fixture(tmp_path,monkeypatch)
+    job['recover_section']=True;requested=[]
+    def transfer(info,folder,a,b,duration,**kw):
+        requested.append((folder,kw))
+        return {'source':str(tmp_path/'section.mkv'),'kind':'section','height':1080,'padded_range':[117.,158.]}
+    monkeypatch.setattr(fast_download,'download_section',transfer)
+    result=fast.prepare_selected(tmp_path,job,selection,metadata=INFO)
+    assert result['clips'] and requested[0][0].name=='range-recovery'
+    assert requested[0][1]['lossless_cut'] is True
+
+

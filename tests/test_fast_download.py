@@ -3,9 +3,21 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from types import SimpleNamespace
 
 from reel_engine import fast_download as fd
 from reel_engine.errors import StageError
+
+
+@pytest.mark.parametrize('supported',[True,False])
+def test_http_requests_are_bounded_only_on_supported_ffmpeg(monkeypatch,supported):
+    fd.section_http_args.cache_clear()
+    monkeypatch.setattr(fd.subprocess,'run',lambda *a,**kw:SimpleNamespace(stdout='-request_size x -initial_request_size y' if supported else 'legacy help'))
+    try:
+        args=fd.section_http_args()
+        assert ('-request_size 1048576' in args) is supported
+        assert '-short_seek_size 1' in args
+    finally:fd.section_http_args.cache_clear()
 
 
 def test_passage_bounds_are_tight_and_clamped():
@@ -50,7 +62,7 @@ def test_section_uses_highest_quality_and_unverified_offset(monkeypatch, tmp_pat
     args = calls[0][0]
     assert args[args.index('-f')+1] == 'bv*+ba/b'
     assert args[args.index('--download-sections')+1] == '*17.000000-53.000000'
-    assert args[args.index('--downloader-args')+1]=='ffmpeg_i:-rw_timeout 15000000 -short_seek_size 1'
+    assert args[args.index('--downloader-args')+1].startswith('ffmpeg_i:-rw_timeout 15000000 -short_seek_size 1')
 
 
 def test_section_quality_downgrade_refused(monkeypatch, tmp_path):

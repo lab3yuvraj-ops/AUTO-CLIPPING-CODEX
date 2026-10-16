@@ -463,7 +463,7 @@ def main():
     p=sub.add_parser('timing-report');p.add_argument('job');p.add_argument('--run-id')
     p=sub.add_parser('phase');p.add_argument('job');p.add_argument('phase',choices=('selection_reading','scene_planning','spec_writing','review_pass','correction','final_inspection'));p.add_argument('--event',choices=('start','end'),required=True);p.add_argument('--round',type=int,default=1);p.add_argument('--run-id')
     p=sub.add_parser('fast-gate');p.add_argument('job');p.add_argument('--evidence',required=True)
-    p=sub.add_parser('fast-prepare');p.add_argument('job');p.add_argument('--selection',required=True)
+    p=sub.add_parser('fast-prepare');p.add_argument('job');p.add_argument('--selection',required=True);p.add_argument('--recover-section',action='store_true',help='One explicitly requested lossless section recovery; preserve the original partial in its folder.')
     p=sub.add_parser('fast-details');p.add_argument('job');p.add_argument('--selection',required=True)
     p=sub.add_parser('plan-check');p.add_argument('job');p.add_argument('--edit',required=True)
     p=sub.add_parser('semantic-plan');p.add_argument('job');p.add_argument('--base',required=True);p.add_argument('--details',required=True)
@@ -576,6 +576,9 @@ def main():
             elif args.command=='fast-prepare':
                 from reel_engine.fast import prepare_selected
                 job=read(job_path(args.job))
+                if args.recover_section:
+                    if not job.get('transcript_first'):raise ValueError('Explicit section recovery is for transcript-first jobs only.')
+                    job['recover_section']=True;save(job_path(args.job),job)
                 if job.get('transcript_first'):
                     from reel_engine.transcript_first import prepare as transcript_prepare
                     result=transcript_prepare(STATE,job,args.selection)

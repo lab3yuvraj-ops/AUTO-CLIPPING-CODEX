@@ -279,7 +279,10 @@ def prepare_selected(state,job,selection_path,normal_analyze=None,metadata=None)
                 info=json.loads(youtube.ytdlp(['--dump-single-json','--skip-download',f"https://www.youtube.com/watch?v={job['video_id']}"]))
         from .fast_download import sections_or_full
         if transcript_first:
-            with stage(state,job['id'],'section_download',run_id=run):
+            recovery=bool(job.get('recover_section'))
+            with stage(state,job['id'],'section_download_recovery' if recovery else 'section_download',run_id=run):
+                if recovery:
+                    return [download_section(info,root/'sections'/f'clip-{i+1}'/'range-recovery',a,b,duration,lossless_cut=True) for i,(a,b) in enumerate(ranges)]
                 return [download_section(info,root/'sections'/f'clip-{i+1}',a,b,duration) for i,(a,b) in enumerate(ranges)]
         return sections_or_full(info,root,ranges,duration,
             full_download=lambda:youtube.download(SimpleNamespace(video_id=job['video_id'],config={'min_source_height':settings.min_source_height},created=job['created']),root/'full-fallback',info=info,no_retries=True),
