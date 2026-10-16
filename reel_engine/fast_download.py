@@ -125,7 +125,10 @@ def download_section(info, root, start, end, source_duration, padding=3):
         return cached
     _bind_request(root, signature)
     options=[x.replace('--max-tries=2','--max-tries=1') for x in transfer_options(root)]
-    ytdlp([*options, '--retries','0','--fragment-retries','0','--extractor-retries','0','-f', 'bv*+ba/b', '--download-sections', f'*{bounds[0]:.6f}-{bounds[1]:.6f}',
+    # yt-dlp's socket timeout does not bound FFmpeg's separate network inputs.
+    # Apply to EVERY input (video and audio), without reconnect/retry loops.
+    ytdlp([*options, '--downloader-args','ffmpeg_i:-rw_timeout 15000000',
+           '--retries','0','--fragment-retries','0','--extractor-retries','0','-f', 'bv*+ba/b', '--download-sections', f'*{bounds[0]:.6f}-{bounds[1]:.6f}',
            '--merge-output-format', 'mkv', '--remux-video', 'mkv', '--continue',
            '--abort-on-unavailable-fragments', '--max-filesize', '12G',
            '-o', str(root/'source.%(ext)s')], timeout=900, info=info, progress_root=root)

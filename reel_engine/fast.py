@@ -225,7 +225,7 @@ def preparation_classifications(selection,job):
     return records
 
 
-def prepare_selected(state,job,selection_path,normal_analyze=None):
+def prepare_selected(state,job,selection_path,normal_analyze=None,metadata=None):
     """Overlap ONE tight proxy ASR batch with highest-quality section downloads."""
     from .fast_download import download_section,section_range,confirm_section_audio
     from .local_transcription import verify_passages
@@ -270,8 +270,13 @@ def prepare_selected(state,job,selection_path,normal_analyze=None):
             if file_hash(media['source'])!=media['source_sha256']:raise ValueError('Eager full-quality file changed before selected preparation.')
             with stage(state,job['id'],'full_quality_reused_after_selection',run_id=run,cached=True):
                 return [{**media,'padded_range':bounds,'cached':True} for bounds in padded]
-        with stage(state,job['id'],'section_metadata',run_id=run):
-            info=json.loads(youtube.ytdlp(['--dump-single-json','--skip-download',f"https://www.youtube.com/watch?v={job['video_id']}"]))
+        if metadata is not None:
+            if metadata.get('id')!=job['video_id'] or abs(float(metadata.get('duration',0))-duration)>2:
+                raise ValueError('In-memory metadata belongs to a different source.')
+            info=metadata
+        else:
+            with stage(state,job['id'],'section_metadata',run_id=run):
+                info=json.loads(youtube.ytdlp(['--dump-single-json','--skip-download',f"https://www.youtube.com/watch?v={job['video_id']}"]))
         from .fast_download import sections_or_full
         if transcript_first:
             with stage(state,job['id'],'section_download',run_id=run):

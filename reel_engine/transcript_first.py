@@ -96,7 +96,7 @@ def prepare(state,job,selection_path):
     the child clips, after speech verification and before rendering.
     """
     from .fast import prepare_selected
-    root=Path(state)/'jobs'/job['id'];run=job['run_id']
+    root=Path(state)/'jobs'/job['id'];run=job['run_id'];info=None
     if not job.get('audio_reference'):
         with stage(state,job['id'],'audio_reference_metadata',run_id=run):
             info=json.loads(youtube.ytdlp(['--dump-single-json','--skip-download',f"https://www.youtube.com/watch?v={job['video_id']}"]))
@@ -107,4 +107,4 @@ def prepare(state,job,selection_path):
     # Bind the audio reference explicitly; it is never final render footage.
     job.update(source=audio['source'],source_sha256=audio['source_sha256'],media_kind='audio-reference')
     atomic_json(root/'job.json',job)
-    return prepare_selected(state,job,selection_path)
+    return prepare_selected(state,job,selection_path,metadata=info) if info is not None else prepare_selected(state,job,selection_path)

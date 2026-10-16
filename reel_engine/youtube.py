@@ -89,6 +89,18 @@ def complete_audio(path,expected_duration):
     return result.returncode==0 and bool(times) and abs(int(times[-1])/1000000-float(expected_duration))<=2
 
 
+def timeout_diagnostic(error,stderr,phase):
+    """Keep downloader evidence when our watchdog, rather than yt-dlp, exits.
+
+    Never persist stdout metadata (which contains signed media URLs).
+    """
+    from .caption_errors import sanitize_message
+    error.diagnostic={**getattr(error,'diagnostic',{}),
+        'yt_dlp_message':sanitize_message(stderr).strip() or str(error),
+        'watchdog_message':str(error),'failure_phase':phase}
+    return error
+
+
 def bounded_extract(command,timeout,input_info=None):
     """Stop rate-limit responses immediately; expose only safe phase labels."""
     process=subprocess.Popen(command,stdin=subprocess.PIPE if input_info is not None else None,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
@@ -118,6 +130,10 @@ def bounded_extract(command,timeout,input_info=None):
             stderr=''.join(lines)
             if process.returncode:raise download_error(stderr)
             return stdout
+        except StageError as exc:
+            if process.poll() is None:stop_download(process)
+            reader.result(timeout=15)
+            raise timeout_diagnostic(exc,''.join(lines),'metadata')
         finally:
             if process.poll() is None:stop_download(process)
             reader.result(timeout=15);output.result(timeout=15)
@@ -142,7 +158,8 @@ def watched_download(command,root,info,timeout,stall_seconds=45,on_audio_ready=N
         return result
     activity=writes();last_report=0
     process=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
-        text=True,encoding='utf-8',errors='replace',start_new_session=os.name!='nt')
+        text=True,encoding='utf-8',errors='replace',start_new_session=os.name!='nt',
+        env={**os.environ,'PYTHONUNBUFFERED':'1'})
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         result=pool.submit(process.communicate,json.dumps(info))
         audio_notified=False
@@ -178,6 +195,16 @@ def watched_download(command,root,info,timeout,stall_seconds=45,on_audio_ready=N
                     raise StageError(f'YouTube media transfer made no byte progress for {stall_seconds} seconds. Stopped the stalled downloader; partial files are retained. Check the connection and retry.',delay=60)
                 if now-started>=timeout:
                     raise StageError('Download time budget exceeded. Partial streams are retained for resuming; no incomplete video was accepted.',delay=60)
+        except StageError as exc:
+            if process.poll() is None:stop_download(process)
+            stdout,stderr=result.result(timeout=15)
+            error=timeout_diagnostic(exc,stderr,'media_transfer')
+            from .caption_errors import sanitize_message
+            # Only known transfer progress lines; never metadata JSON or
+            # arbitrary stdout. This distinguishes pre-FFmpeg stalls next time.
+            error.diagnostic['transfer_progress']=sanitize_message('\n'.join(
+                line for line in stdout.splitlines() if line.startswith(('[info]','[download]','[youtube]'))))
+            raise error
         finally:
             if process.poll() is None:stop_download(process)
             result.result(timeout=15)
@@ -198,7 +225,7 @@ def ytdlp(args, timeout=60, info=None, progress_root=None,metadata_input=None,on
     except Exception as exc:
         from .caption_errors import classify_caption_failure
         from .timing import _locked
-        diagnostic=classify_caption_failure(getattr(exc,'diagnostic',{}).get('yt_dlp_message',str(exc)))
+        diagnostic={**getattr(exc,'diagnostic',{}),**classify_caption_failure(getattr(exc,'diagnostic',{}).get('yt_dlp_message',str(exc)))}
         if '--sub-langs' in args:diagnostic['requested_language']=args[args.index('--sub-langs')+1]
         ident=(metadata_input or info or {}).get('id')
         if not ident:

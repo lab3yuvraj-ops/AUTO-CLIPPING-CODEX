@@ -113,3 +113,10 @@ def test_section_failure_stops_without_full_video_fallback(tmp_path,monkeypatch)
     assert calls==[(120.,155.)]
 
 
+def test_preparation_reuses_in_memory_metadata_without_another_fetch(tmp_path,monkeypatch):
+    fast,job,selection,calls=selected_fixture(tmp_path,monkeypatch)
+    monkeypatch.setattr(fast.youtube,'ytdlp',lambda *a,**kw:pytest.fail('Do not fetch the same metadata twice'))
+    result=fast.prepare_selected(tmp_path,job,selection,metadata=INFO)
+    assert result['clips'] and calls==[(120.,155.)]
+
+

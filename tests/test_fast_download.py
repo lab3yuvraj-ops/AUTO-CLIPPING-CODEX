@@ -50,6 +50,7 @@ def test_section_uses_highest_quality_and_unverified_offset(monkeypatch, tmp_pat
     args = calls[0][0]
     assert args[args.index('-f')+1] == 'bv*+ba/b'
     assert args[args.index('--download-sections')+1] == '*17.000000-53.000000'
+    assert args[args.index('--downloader-args')+1]=='ffmpeg_i:-rw_timeout 15000000'
 
 
 def test_section_quality_downgrade_refused(monkeypatch, tmp_path):

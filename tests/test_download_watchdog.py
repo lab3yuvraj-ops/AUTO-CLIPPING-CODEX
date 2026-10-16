@@ -60,3 +60,24 @@ def test_partial_backend_cannot_be_switched_silently(monkeypatch,tmp_path):
     assert '--downloader' not in youtube.transfer_options(tmp_path)
     (tmp_path/'source.mp4.part.aria2').touch()
     assert '--downloader' in youtube.transfer_options(tmp_path)
+
+
+def test_media_watchdog_keeps_sanitized_underlying_error(tmp_path):
+    code='import sys,json,time; json.load(sys.stdin); print("[info] Downloading 1 time ranges: https://cdn.example/?token=PRIVATE"); print("RAW_METADATA_SECRET"); sys.stderr.write("TLS handshake waiting https://cdn.example/?token=PRIVATE\\nCookie: SECRET\\n"); sys.stderr.flush(); time.sleep(30)'
+    with pytest.raises(StageError) as caught:
+        watched_download([sys.executable,'-c',code],tmp_path,{},10,stall_seconds=2)
+    data=caught.value.diagnostic
+    assert 'TLS handshake waiting' in data['yt_dlp_message']
+    assert 'PRIVATE' not in json.dumps(data) and 'SECRET' not in json.dumps(data)
+    assert data['failure_phase']=='media_transfer'
+    assert 'no byte progress' in data['watchdog_message']
+    assert 'Downloading 1 time ranges' in data['transfer_progress']
+    assert 'RAW_METADATA_SECRET' not in json.dumps(data)
+
+
+def test_metadata_watchdog_keeps_error_but_never_stdout_metadata():
+    code='import sys,time; print("SIGNED_METADATA_SECRET",flush=True); sys.stderr.write("Waiting for player response\\n"); sys.stderr.flush(); time.sleep(30)'
+    with pytest.raises(StageError) as caught:
+        bounded_extract([sys.executable,'-c',code],1)
+    assert 'Waiting for player response' in caught.value.diagnostic['yt_dlp_message']
+    assert 'SIGNED_METADATA_SECRET' not in json.dumps(caught.value.diagnostic)
