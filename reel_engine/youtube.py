@@ -101,10 +101,37 @@ def timeout_diagnostic(error,stderr,phase):
     return error
 
 
+def provider_options():
+    """Explicit optional, on-demand local provider. Never a hosted token service."""
+    if not settings.youtube_po_token_home:return []
+    home=Path(settings.youtube_po_token_home).resolve()
+    if any(c in str(home) for c in (';', '\n', '\r')):
+        raise ActionRequired('PO provider path contains an invalid extractor-argument delimiter.')
+    if not (home/'build/generate_once.js').is_file():
+        raise ActionRequired('Configured local PO provider is not built. Run tools/setup_youtube_po.ps1 first.')
+    if not shutil.which('node'):
+        raise ActionRequired('The optional local PO provider requires Node.js 22 or newer.')
+    from importlib.metadata import version,PackageNotFoundError
+    try:installed=version('bgutil-ytdlp-pot-provider')
+    except PackageNotFoundError:raise ActionRequired('Install requirements-youtube-po-token.txt in the active Python environment.') from None
+    if installed!='2.0.2':raise ActionRequired('Use matching bgutil provider/plugin version 2.0.2; do not silently mix releases.')
+    return ['--extractor-args','youtube:player_client=mweb',
+            '--extractor-args','youtubepot-bgutilscript:server_home='+home.as_posix()]
+
+
+def download_environment():
+    env={**os.environ,'PYTHONUNBUFFERED':'1'}
+    if settings.youtube_po_token_home:
+        env['XDG_CACHE_HOME']=str(ROOT/'workflow'/'private-provider-cache')
+        trust=env.get('SSL_CERT_FILE')
+        if trust and Path(trust).is_file():env.setdefault('NODE_EXTRA_CA_CERTS',trust)
+    return env
+
+
 def bounded_extract(command,timeout,input_info=None):
     """Stop rate-limit responses immediately; expose only safe phase labels."""
     process=subprocess.Popen(command,stdin=subprocess.PIPE if input_info is not None else None,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
-        text=True,encoding='utf-8',errors='replace',start_new_session=os.name!='nt')
+        text=True,encoding='utf-8',errors='replace',start_new_session=os.name!='nt',env=download_environment())
     lines=[];rate_limited=threading.Event();started=time.monotonic()
     def errors():
         for line in process.stderr:
@@ -159,7 +186,7 @@ def watched_download(command,root,info,timeout,stall_seconds=45,on_audio_ready=N
     activity=writes();last_report=0
     process=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
         text=True,encoding='utf-8',errors='replace',start_new_session=os.name!='nt',
-        env={**os.environ,'PYTHONUNBUFFERED':'1'})
+        env=download_environment())
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         result=pool.submit(process.communicate,json.dumps(info))
         audio_notified=False
@@ -240,7 +267,7 @@ def ytdlp(args, timeout=60, info=None, progress_root=None,metadata_input=None,on
 def _ytdlp_call(args, timeout=60, info=None, progress_root=None,metadata_input=None,on_audio_ready=None):
     if settings.youtube_cookie_file and not Path(settings.youtube_cookie_file).is_file():
         raise ActionRequired('The configured YouTube cookie file does not exist. Correct YOUTUBE_COOKIE_FILE, restart the worker, then retry this stage.')
-    extra=['--cookies',settings.youtube_cookie_file] if settings.youtube_cookie_file else []
+    extra=provider_options()+(['--cookies',settings.youtube_cookie_file] if settings.youtube_cookie_file else [])
     if settings.youtube_cookies_from_browser:extra+=['--cookies-from-browser',settings.youtube_cookies_from_browser]
     ident=(metadata_input or info or {}).get('id')
     if not ident:

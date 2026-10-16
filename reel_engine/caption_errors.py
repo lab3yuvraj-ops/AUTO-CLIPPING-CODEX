@@ -6,8 +6,10 @@ def sanitize_message(message):
     from .config import settings
     text=str(message)
     text=re.sub(r'https?://\S+','[URL redacted]',text)
+    text=re.sub(r'(?im)(\b(?:GET|HEAD|POST)\s+)\S+\?\S+',r'\1[request target redacted]',text)
     text=re.sub(r'(?im)^.*(?:cookie:|authorization:|set-cookie:).*$', '[credential header redacted]',text)
     text=re.sub(r'(?:gh[pousr]_|hf_|sk-)[A-Za-z0-9_-]{15,}','[key redacted]',text)
+    text=re.sub(r'''(?i)(["']?(?:po[_-]?token|visitor[_-]?data|content[_-]?binding)["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;}\]]+)''',r'\1[private provider value redacted]',text)
     if settings.youtube_cookie_file:text=text.replace(settings.youtube_cookie_file,'[private cookie path]')
     return text
 

@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     local_model_dir:Path=ROOT/'data/models'
     youtube_cookie_file:str=''
     youtube_cookies_from_browser:str=''
+    youtube_po_token_home:str=''
     youtube_request_delay_seconds:float=2.0
     caption_cache_dir:Path=ROOT/'workflow/caption-cache'
     caption_retry_wait_cap_seconds:float=300.0

@@ -1,0 +1,3 @@
+# Optional local YouTube stream-access helper; not an AI API or a paid service.
+# Match the separately built Node provider release; see tools/setup_youtube_po.ps1.
+bgutil-ytdlp-pot-provider==2.0.2
