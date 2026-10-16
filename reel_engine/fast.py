@@ -343,7 +343,7 @@ def prepare_selected(state,job,selection_path,normal_analyze=None,metadata=None)
             child['details']=str((folder/'selected-details.json').resolve())
             atomic_json(folder/'job.json',child)
             dense_report['passages'].append(detail)
-    job.update(status='Clips awaiting edit',clips=[{'id':c['id'],'status':c['status']} for c in clips]);atomic_json(root/'job.json',job)
+    job.update(status='Clips awaiting edit',clips=[{'id':c['id'],'status':c['status']} for c in clips]);job.pop('error',None);atomic_json(root/'job.json',job)
     from .speech_worker import request
     request(root,run,'stop')
     return {'job':job['id'],'clips':clips,'verification':verification,'dense_proxy_frames':dense_report,'parallel_budget':parallel_budget()}

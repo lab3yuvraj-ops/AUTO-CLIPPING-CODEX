@@ -103,7 +103,7 @@ def download_proxy(info, root,on_audio_ready=None):
     return result
 
 
-def download_section(info, root, start, end, source_duration, padding=3):
+def download_section(info, root, start, end, source_duration, padding=3, *, lossless_cut=False):
     """Transfer highest advertised quality for a padded original-source range.
 
     Copy-mode section seeking can retain keyframe pre-roll. The returned
@@ -120,6 +120,7 @@ def download_section(info, root, start, end, source_duration, padding=3):
         raise StageError('No advertised original video quality is available.', False)
     signature = {'version': 1, 'kind': 'section', 'video_id': info['id'],
                  'requested_range': [float(start), float(end)], 'padded_range': bounds, 'highest_height': height}
+    if lossless_cut:signature['lossless_exact_cut']=True
     cached = _accepted(root, signature)
     if cached:
         return cached
@@ -127,13 +128,24 @@ def download_section(info, root, start, end, source_duration, padding=3):
     options=[x.replace('--max-tries=2','--max-tries=1') for x in transfer_options(root)]
     # yt-dlp's socket timeout does not bound FFmpeg's separate network inputs.
     # Apply to EVERY input (video and audio), without reconnect/retry loops.
-    ytdlp([*options, '--downloader-args','ffmpeg_i:-rw_timeout 15000000',
+    # FFmpeg 8.1 can inherit a negative short-seek capability which its HTTP
+    # unsigned comparison treats as permission to drain the remaining file.
+    # A positive 1-byte threshold forces range seeks instead of whole-stream
+    # readahead; this changes transport only, never source pixels or encoding.
+    cut_options=['--force-keyframes-at-cuts','--downloader-args','ffmpeg_o:-c:v libx264 -preset ultrafast -crf 0 -c:a flac'] if lossless_cut else []
+    ytdlp([*options, '--downloader-args','ffmpeg_i:-rw_timeout 15000000 -short_seek_size 1',*cut_options,
            '--retries','0','--fragment-retries','0','--extractor-retries','0','-f', 'bv*+ba/b', '--download-sections', f'*{bounds[0]:.6f}-{bounds[1]:.6f}',
            '--merge-output-format', 'mkv', '--remux-video', 'mkv', '--continue',
            '--abort-on-unavailable-fragments', '--max-filesize', '12G',
            '-o', str(root/'source.%(ext)s')], timeout=900, info=info, progress_root=root)
     path = root/'source.mkv'
-    video, _, duration = _media(path)
+    try:video, _, duration = _media(path)
+    except StageError as exc:
+        if lossless_cut or 'inconsistent audio/video stream starts' not in str(exc):raise
+        atomic_json(root/'alignment-fallback.json',{'cause':str(exc),'route':'one lossless exact-cut selected-section recovery',
+            'video_encoding':'libx264 CRF 0 ultrafast','audio_encoding':'FLAC','full_video_fallback':False,
+            'original_section_preserved':True})
+        return download_section(info,root/'aligned-lossless',start,end,source_duration,padding,lossless_cut=True)
     expected = bounds[1]-bounds[0]
     # A small keyframe lead/trail is allowed for measurement, not guessed away.
     if video.get('height', 0) < height or duration < expected-.15 or duration > expected+10:
@@ -142,6 +154,7 @@ def download_section(info, root, start, end, source_duration, padding=3):
               'duration': duration, 'requested_range': [float(start), float(end)], 'padded_range': bounds,
               'source_offset': bounds[0], 'offset_verified': False, 'kind': 'section',
               'render_eligible': False, 'cached': False, 'signature': signature}
+    if lossless_cut:result['preparation_encoding']={'video':'lossless libx264 CRF 0','audio':'lossless FLAC','reason':'copy-mode keyframe seek produced mismatched stream starts'}
     atomic_json(root/'accepted.json', result)
     return result
 

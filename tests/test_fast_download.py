@@ -50,7 +50,7 @@ def test_section_uses_highest_quality_and_unverified_offset(monkeypatch, tmp_pat
     args = calls[0][0]
     assert args[args.index('-f')+1] == 'bv*+ba/b'
     assert args[args.index('--download-sections')+1] == '*17.000000-53.000000'
-    assert args[args.index('--downloader-args')+1]=='ffmpeg_i:-rw_timeout 15000000'
+    assert args[args.index('--downloader-args')+1]=='ffmpeg_i:-rw_timeout 15000000 -short_seek_size 1'
 
 
 def test_section_quality_downgrade_refused(monkeypatch, tmp_path):
@@ -58,6 +58,30 @@ def test_section_quality_downgrade_refused(monkeypatch, tmp_path):
     with pytest.raises(StageError, match='highest advertised quality'):
         fd.download_section(info(), tmp_path, 20, 50, 100)
     assert not (tmp_path/'accepted.json').exists()
+
+
+def test_copy_seek_sync_failure_gets_one_lossless_section_recovery(monkeypatch,tmp_path):
+    calls=fake_transfer(monkeypatch,2160,36)
+    def inspect(path):
+        aligned=Path(path).parent.name=='aligned-lossless'
+        return {'streams':[{'codec_type':'video','height':2160,'start_time':0 if aligned else 4.},
+                           {'codec_type':'audio','start_time':0}], 'format':{'duration':'36'}}
+    monkeypatch.setattr(fd,'probe',inspect)
+    result=fd.download_section(info(),tmp_path,20,50,100)
+    assert len(calls)==2 and 'aligned-lossless' in result['source']
+    assert (tmp_path/'source.mkv').exists() and (tmp_path/'alignment-fallback.json').exists()
+    args=calls[1][0]
+    assert '--force-keyframes-at-cuts' in args
+    assert 'ffmpeg_o:-c:v libx264 -preset ultrafast -crf 0 -c:a flac' in args
+    assert '--download-sections' in args and result['signature']['lossless_exact_cut']
+
+
+def test_lossless_recovery_never_bypasses_failed_sync_check(monkeypatch,tmp_path):
+    calls=fake_transfer(monkeypatch,2160,36)
+    monkeypatch.setattr(fd,'probe',lambda p:{'streams':[{'codec_type':'video','height':2160,'start_time':4.},
+        {'codec_type':'audio','start_time':0}], 'format':{'duration':'36'}})
+    with pytest.raises(StageError,match='inconsistent audio/video'):fd.download_section(info(),tmp_path,20,50,100)
+    assert len(calls)==2
 
 
 def test_partial_never_accepted(monkeypatch, tmp_path):
