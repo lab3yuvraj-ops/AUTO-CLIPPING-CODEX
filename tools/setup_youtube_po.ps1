@@ -18,7 +18,7 @@ if (-not (Test-Path -LiteralPath $clipProvider)) {
 $clipOrigin = & git -C $clipProvider remote get-url origin
 $clipTag = & git -C $clipProvider describe --tags --exact-match
 if ($clipOrigin -ne 'https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git' -or $clipTag -ne '2.0.2') { throw 'Existing provider checkout is not the expected official release; it was preserved.' }
-& $Python -m pip install --disable-pip-version-check --retries 0 -r (Join-Path $clipRoot 'requirements-youtube-po-token.txt')
+& $Python -m pip --cache-dir (Join-Path $clipRoot 'workflow/install-cache') install --disable-pip-version-check --retries 0 -r (Join-Path $clipRoot 'requirements-youtube-po-token.txt')
 if ($LASTEXITCODE -ne 0) { throw 'Optional plugin installation failed; TLS checking remains enabled.' }
 Push-Location (Join-Path $clipProvider 'server')
 try {
@@ -29,5 +29,7 @@ try {
     & node build/generate_once.js --version
     if ($LASTEXITCODE -ne 0) { throw 'Offline provider check failed.' }
 } finally { Pop-Location }
+& $Python (Join-Path $clipRoot 'reel.py') cleanup-install-cache
+if ($LASTEXITCODE -ne 0) { throw 'Provider installed; private pip-cache cleanup needs attention.' }
 Write-Output 'Installed optional local provider. No tokens generated or YouTube downloads started.'
 Write-Output ('Add to private .env: YOUTUBE_PO_TOKEN_HOME=' + (Join-Path $clipProvider 'server').Replace('\','/'))

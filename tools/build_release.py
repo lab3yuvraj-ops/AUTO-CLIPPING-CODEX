@@ -13,6 +13,7 @@ def build(root=ROOT):
     paths=[root/name for name in ['reel.py','AGENTS.md','README.md','ARCHITECTURE.md','ONBOARDING.md','.gitignore','.env.example','requirements.txt','requirements-local.txt','pytest.ini']]
     for folder,pattern in [('reel_engine','*.py'),('tests','test_*.py'),('templates','*.json'),('assets','*-OFL.txt'),('assets','*.ttf'),('tools','build_release.py'),('tools','benchmark_render.py'),('docs','*.md')]:paths+=list((root/folder).glob(pattern))
     paths.append(root/'assets'/'cta'/'watch-full-video.mp4')
+    paths.extend(root/name for name in ('tools/setup_local.ps1','tools/setup_youtube_po.ps1','requirements-youtube-po-token.txt'))
     paths.extend(root/'tools'/name for name in ('benchmark_preparation.py','replay_preparation.py','replay_review_checks.py','apply_cleanup.ps1'))
     allowed={str(path.relative_to(root)).replace('\\','/') for path in paths}
     # Refuse to reuse a polluted export; never delete an unknown local tree.

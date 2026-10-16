@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     download_mode:str=Field(default='auto',pattern='^(auto|selected-sections)$')
     transcript_first:bool=True
     single_pass_review:bool=True
+    auto_cleanup_completed:bool=True
     compact_pre_review:bool=True
     processing_mode:str=Field(default='smart',pattern='^(fast|smart)$')
     adaptive_details:bool=True

@@ -58,6 +58,8 @@ Publishing saves idempotency and provider state, polls confirmation, and records
 
 ## Private state and sharing
 
+Storage: `AUTO_CLEANUP_COMPLETED=true` removes generated section/audio/intermediate/frame media after every selected clip in a transcript-first job has a valid final export. It preserves final MP4s, verified words/specs/review evidence/timings and publishing state. Failed/active jobs keep recovery files. Revisions after cleanup require source reacquisition; disable the setting or use `--keep-lossless` to retain intermediates. `cleanup-completed JOB` retries cleanup without rendering or publishing. Onboarding's `tools/setup_local.ps1` uses and removes a project-only pip cache after successful installation; models and global installation caches are never purged.
+
 `.env`, cookies, channel connections, jobs, transcripts, downloaded footage, previews, publication records, model weights and virtual environments stay local and are excluded from this repository. Every student uses a separate clone and their own account credentials. The bundled CTA is a supplied generic end card; replace it with your own if desired. Font licenses are included beside the font files.
 
 Use `tools/build_release.py` to prepare an allowlisted student export. It scans for credential patterns and excludes private runtime state. It does not publish a repository or Instagram post. Never commit tokens, cookies or signed upload URLs.

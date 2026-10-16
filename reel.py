@@ -310,8 +310,21 @@ def render(ident,edit_path,keep_lossless=False,threads=None):
     if job.get('fast'):
         from reel_engine.timing import stage
         with stage(STATE,job.get('timing_job',ident),'render_'+ident[-5:],run_id=job.get('run_id')):
-            return _render(ident,edit_path,keep_lossless,threads)
-    return _render(ident,edit_path,keep_lossless,threads)
+            result=_render(ident,edit_path,keep_lossless,threads)
+    else:result=_render(ident,edit_path,keep_lossless,threads)
+    if settings.auto_cleanup_completed and not keep_lossless:
+        from reel_engine.completed_cleanup import cleanup_completed
+        from reel_engine.timing import stage
+        try:
+            with stage(STATE,job.get('timing_job',ident),'storage_cleanup_'+ident[-5:],run_id=job.get('run_id')):
+                cleanup=cleanup_completed(STATE,ident,protected_paths=[settings.local_model_dir,settings.youtube_cookie_file,settings.caption_cache_dir])
+            result=read(job_path(ident));result['cleanup_result']=cleanup
+        except (OSError,ValueError,KeyError):
+            # Never turn a successfully validated preview into a failed render
+            # because a file was locked or a conservative cleanup check refused.
+            result=read(job_path(ident))
+            result['cleanup_result']={'completed':False,'reason':'Cleanup deferred: files locked or safety checks refused. Retained artifacts; use cleanup-completed after resolving.'}
+    return result
 
 def _pre_render_review_guard(job,spec,edit,tracking,root):
     from reel_engine.preflight import preflight,crop_review_flags
@@ -348,6 +361,12 @@ def _pre_render_review_guard(job,spec,edit,tracking,root):
 
 def _render(ident,edit_path,keep_lossless=False,threads=None):
     path=job_path(ident);job=read(path);root=path.parent;spec=read(Path(edit_path))
+    if job.get('storage_cleanup',{}).get('source_removed'):
+        spec_hash=hashlib.sha256(json.dumps(spec,sort_keys=True).encode()).hexdigest()
+        if (not keep_lossless and spec_hash==job.get('edit_spec_hash') and job.get('engine_version')==engine_version()
+            and Path(job.get('video','')).is_file() and digest(Path(job['video']))==job.get('render_sha256')):
+            return job
+        raise ValueError('Completed-job cleanup removed working source media. Final MP4 and verified words/specs remain; reacquire the selected source before a revision. Set AUTO_CLEANUP_COMPLETED=false before future renders to retain working media.')
     plan=spec['candidate'];edit,tracking=prepare_edit(job,spec,root)
     _pre_render_review_guard(job,spec,edit,tracking,root)
     version=engine_version()
@@ -468,6 +487,8 @@ def main():
     p=sub.add_parser('plan-check');p.add_argument('job');p.add_argument('--edit',required=True)
     p=sub.add_parser('semantic-plan');p.add_argument('job');p.add_argument('--base',required=True);p.add_argument('--details',required=True)
     p=sub.add_parser('doctor')
+    p=sub.add_parser('cleanup-completed');p.add_argument('job')
+    p=sub.add_parser('cleanup-install-cache')
     p=sub.add_parser('performance-report');p.add_argument('job')
     args=parser.parse_args();STATE.mkdir(exist_ok=True)
     if getattr(args,'cookies_from_browser',None) is not None:settings.youtube_cookies_from_browser=args.cookies_from_browser
@@ -492,6 +513,12 @@ def main():
             if args.command=='doctor':
                 from reel_engine.doctor import check
                 result=check(ROOT,settings)
+            elif args.command=='cleanup-completed':
+                from reel_engine.completed_cleanup import cleanup_completed
+                result=cleanup_completed(STATE,args.job,protected_paths=[settings.local_model_dir,settings.youtube_cookie_file,settings.caption_cache_dir])
+            elif args.command=='cleanup-install-cache':
+                from reel_engine.completed_cleanup import cleanup_install_cache
+                result=cleanup_install_cache(STATE)
             elif args.command=='performance-report':
                 from reel_engine.performance import summarize
                 result=summarize(job_path(args.job).parent)

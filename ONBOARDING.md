@@ -8,6 +8,8 @@ Codex should perform the setup, not just display instructions: inspect the exist
 
 Use Python 3.11, Git, FFmpeg/ffprobe and a supported yt-dlp JavaScript runtime such as Node.js. From the repository folder in PowerShell:
 
+Codex runs `powershell -File tools/setup_local.ps1` once Python 3.11 is available (optional `-Python C:/path/to/python.exe`). This creates/reuses the private environment, installs CPU dependencies, checks package/import compatibility and removes only its own `workflow/install-cache` on success. It does not install system tools or account/model access; continue those steps below. Failed installation keeps the cache for recovery. Existing global pip/npm caches and model weights remain untouched. The individual commands below are the manual alternative; use `--no-cache-dir` on their pip invocations to avoid accumulating new installation downloads.
+
 ```powershell
 py -3.11 -m venv .venv
 .venv/Scripts/python.exe -m pip install --upgrade pip
@@ -49,6 +51,8 @@ Send a **YouTube URL** or say **YouTube analyze**. Codex asks how many clips you
 You receive the actual MP4 and the question **“Do you want to upload this video to Instagram?”** Clear approval of that exact preview authorizes publication. Codex polls the same Zernio request until it confirms a post ID/link. Saying no leaves the clip local. No dashboard, hosted worker or background schedule is created.
 
 ## Sharing on GitHub
+
+Completed transcript-first YouTube jobs automatically delete generated working media once every selected clip is rendered and technically valid. Final MP4s and lightweight specs, verified words, review/timing records and publishing state remain. A later edit may need to download the source section again. Set `AUTO_CLEANUP_COMPLETED=false` before rendering, or explicitly use `--keep-lossless`, to keep intermediates. Failed/active jobs retain recovery files. `reel.py cleanup-completed JOB_ID` retries a safely deferred cleanup; `reel.py cleanup-install-cache` removes only this project's installation cache. Neither command removes models/credentials or publishes.
 
 Use `tools/build_release.py` to prepare a clean, allowlisted repository folder and ZIP under ignored `release/`. It includes code, docs, tests, licensed fonts, the supplied CTA and blank configuration templates. It excludes `.env`, cookies, connections, saved jobs, private footage, model weights, virtual environments and publication records. The CTA is shared intentionally as the project's supplied end card; students may replace it with their own.
 
