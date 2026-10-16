@@ -15,7 +15,7 @@ Create reviewed vertical clips from YouTube videos, working interactively in Cod
 ## Start here
 
 1. Clone this repository and open its folder in Codex.
-2. Say **onboarding**. Follow [ONBOARDING.md](ONBOARDING.md) to install Python 3.11, CPU dependencies, FFmpeg/ffprobe, a supported yt-dlp JavaScript runtime, and local speech models. First-time installation/model downloads are additional setup time.
+2. Say **onboarding**. Codex follows [ONBOARDING.md](ONBOARDING.md) and [browser-assisted setup](docs/BROWSER-ONBOARDING.md), opens Chrome where browser tools are available, handles routine setup and helps configure the student's Hugging Face read token/model access privately. Install Python 3.11, CPU dependencies, FFmpeg/ffprobe, a supported yt-dlp JavaScript runtime, and local speech models. The student still completes required login, 2FA/CAPTCHA and personal terms/consent. First-time installation/model downloads are additional setup time.
 3. Enter your own credentials in the private local `.env`: `ZERNIO_API_KEY`, `ZERNIO_INSTAGRAM_ID`, and `HF_TOKEN` for initial gated speaker-model provisioning. Public YouTube lookup needs no API key. Instagram posting is optional; a supplied YouTube URL can be prepared without Instagram credentials.
 4. Send a **YouTube URL**, or say **analyze YouTube** to check your configured channel. Codex asks **one clip or two?** unless you already supplied the count.
 5. Codex selects complete moments, reviews character/action framing, renders and validates each clip, and shows the real MP4 preview. If a second moment is weak or impossible under the constraints, it tells you honestly.

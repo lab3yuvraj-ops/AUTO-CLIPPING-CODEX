@@ -2,6 +2,8 @@
 
 Open your own clone as a project in Codex and say **onboarding**. Each student has a separate local checkout, private `.env`, channel and processing history. The repository contains no creator credentials, channel connection, saved videos or local model weights.
 
+Codex should perform the setup, not just display instructions: inspect the existing installation, open Chrome with supported browser/computer-use tools, guide your own account access, install missing dependencies and prepare models. Follow [browser-assisted onboarding](docs/BROWSER-ONBOARDING.md). Routine clicks can be handled by Codex. You may still need to sign in, complete 2FA/CAPTCHA, personally accept model-access terms/contact sharing, or approve a service/Windows permission. A clone cannot bypass those requirements or install browser-control tools automatically. Never send passwords or tokens in chat.
+
 ## First-time installation (Windows)
 
 Use Python 3.11, Git, FFmpeg/ffprobe and a supported yt-dlp JavaScript runtime such as Node.js. From the repository folder in PowerShell:
@@ -30,7 +32,7 @@ The command verifies that the Instagram account is accessible to your Zernio key
 
 ## Prepare local transcription once
 
-Accept access conditions for [pyannote Community-1](https://huggingface.co/pyannote/speaker-diarization-community-1) using your own Hugging Face account. Set your read token as `HF_TOKEN` in private `.env`, then run:
+Codex opens [pyannote Community-1](https://huggingface.co/pyannote/speaker-diarization-community-1) in Chrome and checks your own account's access. Sign in and personally accept any required access conditions/contact sharing. Codex can then navigate [Hugging Face access tokens](https://huggingface.co/settings/tokens) and help configure a read-only token with the least permissions needed for the model. Existing suitable credentials are reused; do not create a replacement unnecessarily. Save it as `HF_TOKEN` in private `.env` using a supported private transfer, local editor or hidden terminal prompt, never ordinary chat/tool output. Then Codex runs:
 
 ```powershell
 .venv/Scripts/python.exe reel.py prepare-models --download
