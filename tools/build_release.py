@@ -14,6 +14,9 @@ def build(root=ROOT):
     for folder,pattern in [('reel_engine','*.py'),('tests','test_*.py'),('templates','*.json'),('assets','*-OFL.txt'),('assets','*.ttf'),('tools','build_release.py'),('tools','benchmark_render.py'),('docs','*.md')]:paths+=list((root/folder).glob(pattern))
     paths.append(root/'assets'/'cta'/'watch-full-video.mp4')
     paths.extend(root/name for name in ('tools/setup_local.ps1','tools/setup_youtube_po.ps1','requirements-youtube-po-token.txt'))
+    paths.append(root/'telegram_bot.py')
+    paths.append(root/'tools/telegram_startup.ps1')
+    paths.extend((root/'telegram_bridge').glob('*.py'))
     paths.extend(root/'tools'/name for name in ('benchmark_preparation.py','replay_preparation.py','replay_review_checks.py','apply_cleanup.ps1'))
     allowed={str(path.relative_to(root)).replace('\\','/') for path in paths}
     # Refuse to reuse a polluted export; never delete an unknown local tree.
