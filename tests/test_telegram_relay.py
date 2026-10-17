@@ -49,23 +49,22 @@ def test_thread_configuration_is_required_and_never_guessed(monkeypatch):
         with pytest.raises(mod.RelayError):mod.Session('codex',value)
 
 def test_readonly_check_uses_exact_thread_without_resume_or_generation(monkeypatch):
-    import io
+    from contextlib import contextmanager
     monkeypatch.setattr(mod.shutil,'which',lambda _: 'codex.exe')
-    class Pipe(io.StringIO):
-        pass
-    class Proc:
-        def __init__(self):
-            self.stdin=Pipe();self.stdout=iter([json.dumps({'id':1,'result':{}})+'\n',json.dumps({'id':2,'result':{'thread':{'id':TID}}})+'\n']);self.stopped=False
-        def poll(self):return 0 if self.stopped else None
-        def terminate(self):self.stopped=True
-        def wait(self,timeout):return 0
-    p=Proc();calls=[]
-    monkeypatch.setattr(mod.subprocess,'Popen',lambda args,**kwargs:calls.append(args) or p)
+    class Connection:
+        def __init__(self):self.sent=[];self.responses=iter([{'id':1,'result':{}},{'id':2,'result':{'thread':{'id':TID,'status':{'type':'idle'}}}}])
+        def send(self,message):self.sent.append(json.loads(message))
+        def recv(self,timeout):return json.dumps(next(self.responses))
+    connection=Connection();calls=[]
+    @contextmanager
+    def control(executable):
+        calls.append(executable);yield connection
+    monkeypatch.setattr(mod,'control_connection',control)
     assert mod.Session('codex',TID).check()
-    assert calls==[['codex.exe','app-server','proxy']]
-    sent=[json.loads(x) for x in p.stdin.getvalue().splitlines()]
-    assert [x['method'] for x in sent]==['initialize','initialized','thread/read']
-    assert sent[-1]['params']['threadId']==TID
+    assert calls==['codex.exe']
+    assert [x['method'] for x in connection.sent]==['initialize','initialized','thread/read']
+    assert connection.sent[-1]['params']=={'threadId':TID,'includeTurns':False}
+
 
 def test_all_allowlisted_users_forward_verbatim_without_cross_chat_notifications(tmp_path):
     class DestAPI(API):
@@ -89,3 +88,33 @@ def test_allowlist_parsing_is_explicit_bounded_and_defaults_to_single_owner():
     assert mod.allowed_users({},0)==()
     for raw in ('42,','0','-4','true','42; command',str(2**63),','.join(str(x) for x in range(1,22))):
         with pytest.raises(mod.RelayError):mod.allowed_users({'TELEGRAM_ALLOWED_USER_IDS':raw})
+
+
+def test_saved_but_not_loaded_thread_cannot_establish_live_delivery(monkeypatch):
+    from contextlib import contextmanager
+    monkeypatch.setattr(mod.shutil,'which',lambda _: 'codex.exe')
+    class Connection:
+        def __init__(self):self.responses=iter([{'id':1,'result':{}},{'id':2,'result':{'thread':{'id':TID,'status':{'type':'notLoaded'}}}}])
+        def send(self,message):pass
+        def recv(self,timeout):return json.dumps(next(self.responses))
+    @contextmanager
+    def control(executable):yield Connection()
+    monkeypatch.setattr(mod,'control_connection',control)
+    monkeypatch.setattr(mod.subprocess,'run',lambda *args,**kwargs:pytest.fail('Must not queue into a disconnected saved chat'))
+    with pytest.raises(mod.RelayError,match='not live'):
+        mod.Session('codex',TID).send('hello')
+
+
+def test_wrong_thread_and_protocol_error_cannot_queue(monkeypatch):
+    from contextlib import contextmanager
+    monkeypatch.setattr(mod.shutil,'which',lambda _: 'codex.exe')
+    class Connection:
+        def send(self,message):pass
+        def recv(self,timeout):raise ValueError('PRIVATE malformed response')
+    @contextmanager
+    def control(executable):yield Connection()
+    monkeypatch.setattr(mod,'control_connection',control)
+    monkeypatch.setattr(mod.subprocess,'run',lambda *args,**kwargs:pytest.fail('Must not queue after protocol failure'))
+    with pytest.raises(mod.RelayError,match='WebSocket') as error:
+        mod.Session('codex',TID).send('hello')
+    assert 'PRIVATE' not in str(error.value)

@@ -3,7 +3,8 @@ import argparse
 import json
 import os
 from pathlib import Path
-import queue
+import socket
+from contextlib import contextmanager
 import re
 import shutil
 import subprocess
@@ -30,6 +31,55 @@ def allowed_users(values, owner=0):
     return ids
 
 
+@contextmanager
+def control_connection(executable):
+    """The official proxy carries raw WebSocket bytes, NOT JSONL.
+
+    socketpair bridges a WebSocket client to the official proxy on Windows
+    Python builds without AF_UNIX. No listener or public TCP port is opened.
+    """
+    try:
+        from websockets.sync.client import connect
+    except ImportError:
+        raise RelayError('Install optional requirements-telegram.txt for the WebSocket transport.') from None
+    process=subprocess.Popen([executable,'app-server','proxy'],stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
+        env={k:v for k,v in os.environ.items() if not k.startswith('TELEGRAM_')},
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+    client,bridge=socket.socketpair()
+    def upstream():
+        try:
+            while True:
+                data=bridge.recv(65536)
+                if not data:break
+                process.stdin.write(data);process.stdin.flush()
+        except OSError:pass
+        finally:
+            try:process.stdin.close()
+            except OSError:pass
+    def downstream():
+        try:
+            while True:
+                data=os.read(process.stdout.fileno(),65536)
+                if not data:break
+                bridge.sendall(data)
+        except OSError:pass
+        finally:
+            try:bridge.shutdown(socket.SHUT_WR)
+            except OSError:pass
+    threads=[threading.Thread(target=f,daemon=True) for f in (upstream,downstream)]
+    for thread in threads:thread.start()
+    try:
+        with connect('ws://localhost/',sock=client,proxy=None,open_timeout=5,close_timeout=1,max_size=2**20) as connection:
+            yield connection
+    finally:
+        client.close();bridge.close()
+        if process.poll() is None:process.terminate()
+        try:process.wait(timeout=3)
+        except subprocess.TimeoutExpired:process.kill();process.wait(timeout=3)
+        for thread in threads:thread.join(timeout=1)
+
+
 class Session:
     def __init__(self, executable, thread):
         self.executable=shutil.which(executable)
@@ -43,42 +93,31 @@ class Session:
         return {k:v for k,v in os.environ.items() if not k.startswith('TELEGRAM_')}
 
     def check(self):
-        # Proxy connects to an ALREADY RUNNING shared server; never starts one.
-        p=subprocess.Popen([self.executable,'app-server','proxy'],stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,encoding='utf-8',
-            env=self.env(),creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
-        lines=queue.Queue()
-        def read():
-            for line in p.stdout:lines.put(line)
-            lines.put(None)
-        threading.Thread(target=read,daemon=True).start()
-        def receive(ident):
+        def receive(connection,ident):
             import time
             deadline=time.monotonic()+10
             while time.monotonic()<deadline:
-                try:line=lines.get(timeout=max(.01,deadline-time.monotonic()))
-                except queue.Empty:break
-                if line is None:break
-                try:result=json.loads(line)
-                except ValueError:continue
+                result=json.loads(connection.recv(timeout=max(.01,deadline-time.monotonic())))
                 if result.get('id')==ident:
                     if 'error' in result:raise RelayError('Existing session is unavailable on the shared Codex server.')
                     return result.get('result',{})
-            raise RelayError('Cannot reach the existing session on the shared Codex server. No separate session started.')
-        def send(obj):p.stdin.write(json.dumps(obj)+'\n');p.stdin.flush()
+            raise RelayError('Shared Codex server handshake timed out; no message sent.')
         try:
-            send({'id':1,'method':'initialize','params':{'clientInfo':{'name':'private_telegram_relay','version':'1.0.0'}}})
-            receive(1);send({'method':'initialized'})
-            send({'id':2,'method':'thread/read','params':{'threadId':self.thread,'includeTurns':False}})
-            thread=receive(2).get('thread',{})
-            if thread.get('id')!=self.thread:raise RelayError('The server did not confirm the exact configured session.')
-            return True
-        except (OSError,ValueError):
-            raise RelayError('Shared Codex server connection failed; nothing was forwarded.') from None
-        finally:
-            if p.poll() is None:p.terminate()
-            try:p.wait(timeout=3)
-            except subprocess.TimeoutExpired:p.kill();p.wait(timeout=3)
+            with control_connection(self.executable) as connection:
+                connection.send(json.dumps({'id':1,'method':'initialize','params':{'clientInfo':{'name':'private_telegram_relay','title':'Private Telegram Relay','version':'1.0.0'}}}))
+                receive(connection,1)
+                connection.send(json.dumps({'method':'initialized','params':{}}))
+                connection.send(json.dumps({'id':2,'method':'thread/read','params':{'threadId':self.thread,'includeTurns':False}}))
+                thread=receive(connection,2).get('thread',{})
+                if thread.get('id')!=self.thread:raise RelayError('The server did not confirm the exact configured session.')
+                status=thread.get('status',{}).get('type')
+                if status not in ('idle','active'):
+                    raise RelayError('The saved chat is not live on this shared server. Reopening it here would create a second execution context; no message sent.')
+                return True
+        except RelayError:raise
+        except Exception:
+            # Protocol/network exceptions can contain addresses or payloads.
+            raise RelayError('Shared Codex WebSocket connection failed; nothing was forwarded.') from None
 
     def send(self,text):
         self.check()
@@ -123,7 +162,7 @@ class Relay:
         self.api.text(sender_id,'Queued to your existing Codex session. Read the reply in Codex.')
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('command',choices=['doctor','run']);args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('command',choices=['doctor','run']);parser.add_argument('--persistent',action='store_true');args=parser.parse_args()
     interpreter_dir=Path(os.sys.executable).parent
     for trust in (interpreter_dir/'ca.pem',interpreter_dir.parent/'ca.pem'):
         if trust.is_file():
@@ -131,7 +170,20 @@ def main():
     try:
         cfg=Config.load(ROOT);values={**dotenv_values(ROOT/'.env'),**os.environ}
         users=allowed_users(values,cfg.owner)
-        session=Session(cfg.codex,values.get('TELEGRAM_CODEX_THREAD_ID',''));session.check()
+        if args.persistent and args.command=='run':
+            if not cfg.token or not users:raise RelayError('Configure the bot token and allowed users first.')
+            from telegram_bridge.persistent import run
+            secrets=tuple(v for k,v in values.items() if v and any(tag in k.upper() for tag in ('KEY','TOKEN','PASSWORD','SECRET')))
+            with singleton(cfg.state/'bot.lock'):run(cfg,users,secrets)
+            return
+        thread=values.get('TELEGRAM_CODEX_THREAD_ID','')
+        if args.persistent:
+            receipt=cfg.state/'persistent-conversation.json'
+            if not receipt.exists():raise RelayError('Persistent conversation has not been created yet.')
+            record=json.loads(receipt.read_text(encoding='utf-8'))
+            if record.get('users')!=list(users) or record.get('cwd')!=str(ROOT.resolve()):raise RelayError('Persistent conversation binding mismatch.')
+            thread=record.get('thread','')
+        session=Session(cfg.codex,thread);session.check()
         if args.command=='doctor':
             print(json.dumps({'existing_session_reachable':True,'telegram_configured':bool(cfg.token and users),'allowed_user_count':len(users),'message_sent':False,'generation_started':False}));return
         if not cfg.token or not users:raise RelayError('Configure the bot token and private allowed users first.')
@@ -142,7 +194,10 @@ def main():
                 old=api.updates(-1,0);relay.data['offset']=max([u['update_id']+1 for u in old]+[relay.data['offset']]);relay.data['initialized']=True;relay.save()
             while True:
                 for update in api.updates(relay.data['offset']):relay.handle(update)
-    except (RelayError,TelegramError,OSError,ValueError):
+    except RelayError as error:
+        print('Relay not connected: '+str(error))
+        return 1
+    except (TelegramError,OSError,ValueError,RuntimeError,subprocess.SubprocessError):
         print('Relay not connected. Check private configuration and the existing shared Codex server. No automatic restart or alternate session.')
         return 1
 

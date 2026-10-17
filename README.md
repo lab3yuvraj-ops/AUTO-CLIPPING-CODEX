@@ -77,3 +77,5 @@ Tests cover downloader bounds, caption caching/fallback, selected verification, 
 For a stalled selected-section transfer, an explicit bounded recovery is available: `python reel.py fast-prepare JOB --selection SELECTION.json --recover-section`. It preserves partials and verified speech, downloads only the selected range losslessly, and checks source audio anchors again. It does not download the full video. See ARCHITECTURE.md.
 
 For an incoming-text relay to one existing Codex session, see [docs/TELEGRAM-RELAY.md](docs/TELEGRAM-RELAY.md). This is a separate, not-yet-connected prototype: same-desktop-chat delivery requires a reachable shared server and a supervised test. It does not change editing automation or mirror replies. Do not start the legacy clipping controller for this use case.
+
+The owner-approved `telegram_relay.py run --persistent` mode now supports a dedicated persistent Codex conversation with Telegram text questions/replies and validated MP4 delivery. It is separate from the open desktop chat and keeps the editor unchanged. Setup, permissions, dependencies and actual validation limits are in docs/TELEGRAM-RELAY.md.

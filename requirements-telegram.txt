@@ -1,0 +1,2 @@
+# Optional incoming text relay only; existing editor dependencies unchanged.
+websockets>=15,<18
