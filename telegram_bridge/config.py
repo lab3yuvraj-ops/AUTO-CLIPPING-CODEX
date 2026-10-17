@@ -13,6 +13,8 @@ class Config:
     timeout: int = 3600
     max_clips: int = 5
     upload_bytes: int = 49_000_000
+    default_clips: int = 1
+    reselection_attempts: int = 2
 
     @property
     def state(self):
@@ -32,7 +34,9 @@ class Config:
                    values.get('TELEGRAM_CODEX_PATH','codex'),
                    number('TELEGRAM_JOB_TIMEOUT_SECONDS',3600,60,14400),
                    number('TELEGRAM_MAX_CLIPS',5,1,10),
-                   number('TELEGRAM_UPLOAD_MAX_BYTES',49_000_000,1,49_000_000))
+                   number('TELEGRAM_UPLOAD_MAX_BYTES',49_000_000,1,49_000_000),
+                   number('TELEGRAM_DEFAULT_CLIPS',1,1,5),
+                   number('TELEGRAM_RESELECTION_ATTEMPTS',2,0,2))
 
     def require_private_owner(self):
         if not self.token or not self.owner:

@@ -24,9 +24,16 @@ Never modify main, force-push, replace the editor, start a dashboard or introduc
 Use bounded recovery, not infinite retries, and never redo successful expensive stages needlessly.
 An incorrect caption language requires diagnosing native-track selection or using the existing
 local original-audio ASR fallback; never accept translated/dubbed tracks to force progress.
-A YouTube URL requests clips: ask the clip count in a normal text reply unless already supplied.
-When clarification is needed, ask it as plain text and finish your turn; the next Telegram message
-will be the human's answer. Do not use interactive question tools requiring a desktop client.
+A YouTube URL requests clips. Do not ask routine questions, including clip count or permission
+to select another moment. Honor an explicit count; otherwise use the configured default below.
+Choose ordinary editorial and recovery decisions autonomously within the existing rules.
+When a candidate genuinely cannot work, select a different complete 30-60s moment automatically,
+up to the configured replacement limit per requested clip. Reuse successful preparation and only
+prepare changed ranges. Do not repeat reviews of the same spec or conceal failed candidates.
+Never ask 'Should I select a different moment?'. If bounded alternatives are exhausted, report
+the precise blocker and retained work without a question or an automatic endless retry.
+Do not use interactive question tools requiring a desktop client. Missing required consent or
+credentials is a needs_action report, not permission to guess, bypass consent or request secrets.
 Use actual local media and inspection tools; never claim tool access or review without evidence.
 Give concise progress updates while working, including the problem, repair and resumed stage.
 Read the latest transcript-first/single-pass rules before treating a visual warning as a blocker.
@@ -43,8 +50,8 @@ real pre-render review as disclosed warnings, without correction loops. Do not r
 source from a wide overview frame alone, or claim no feasible plan before assessing time-scoped
 primary-subject framing. Genuine unresolvable loss of required face/action remains needs_attention.
 Only stop for a genuine external blocker, missing human-only consent/credentials, unavailable
-tool capability, unresolved required editorial evidence, or exhausted bounded recovery. Ask in
-Telegram for decisions that can be answered there. Explain exactly what remains when local
+tool capability, unresolved required editorial evidence, or exhausted bounded recovery. Explain
+exactly what remains when local
 physical/browser interaction is actually necessary. Never invent an automatic fix or approval.
 Mark real interactive phases and timings.
 Never publish, create publication approval, or write to Instagram in this preview-only transport.
@@ -58,6 +65,17 @@ def safe_text(text,secrets=()):
     for secret in secrets:
         if secret and len(secret)>=8:text=text.replace(secret,'[redacted]')
     return re.sub(r'\b(?:[0-9]{8,12}:[A-Za-z0-9_-]{30,50}|gh[pousr]_[A-Za-z0-9]{20,}|hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,})\b','[redacted]',text)
+
+
+def message_chunks(text,limit=3900):
+    """Telegram measures text in UTF-16 units; emoji must not overflow a chunk."""
+    part=[];size=0
+    for char in text:
+        units=2 if ord(char)>0xffff else 1
+        if size+units>limit:
+            yield ''.join(part);part=[];size=0
+        part.append(char);size+=units
+    if part:yield ''.join(part)
 
 
 class Conversation:
@@ -74,8 +92,20 @@ class Conversation:
         self.ws=None;self.rpc_id=10;self.reply='';self.progress_seen=set();self.stop=threading.Event()
     def save(self):atomic_json(self.path,self.data)
     def say(self,owner,text):
+        from .api import TelegramError
         text=safe_text(text,self.secrets)
-        for i in range(0,len(text),3900):self.api.text(owner,text[i:i+3900])
+        for chunk in message_chunks(text):
+            try:self.api.text(owner,chunk)
+            except TelegramError as exc:
+                # A notification failure must not abort the actual Codex turn.
+                # No replay after ambiguous delivery; retain only safe diagnostics.
+                with self.lock:
+                    self.data['last_notification_error']={'at':time.time(),'status':exc.status,
+                        'retry_after':exc.retry_after,'text_sha256':hashlib.sha256(chunk.encode()).hexdigest(),
+                        'automatic_resend':False}
+                    self.save()
+                return False
+        return True
     def handle(self,update):
         with self.lock:
             ident=update.get('update_id')
@@ -111,7 +141,8 @@ class Conversation:
         setup,secrets=instructions(self.cfg.root)
         self.secrets=tuple(set(self.secrets+secrets))
         return {'cwd':str(self.cfg.root.resolve()),'approvalPolicy':'never','sandbox':'workspace-write',
-            'modelProvider':'openai','developerInstructions':INSTRUCTIONS+setup}
+            'modelProvider':'openai','developerInstructions':INSTRUCTIONS+setup+
+                f'\nTelegram default clip count: {self.cfg.default_clips}. Maximum replacement candidates per requested clip: {self.cfg.reselection_attempts}.\n'}
 
     def setup(self):
         self.rpc('initialize',{'clientInfo':{'name':'telegram_persistent_codex','title':'Telegram Codex Conversation','version':'1.0.0'}})
@@ -186,8 +217,8 @@ class Conversation:
             # Clear active before sending a response; no automatic job rerun on upload errors.
             self.data['active']=None;self.save()
             if status=='completed' and self.reply:
-                self.say(owner,self.reply)
-                self.data['last_delivery']={'turn':turn.get('id'),'telegram_reply_confirmed':True,'text_sha256':hashlib.sha256(self.reply.encode()).hexdigest(),'at':time.time()};self.save()
+                sent=self.say(owner,self.reply)
+                self.data['last_delivery']={'turn':turn.get('id'),'telegram_reply_confirmed':sent,'text_sha256':hashlib.sha256(self.reply.encode()).hexdigest(),'at':time.time()};self.save()
                 self.deliver_video(owner)
             else:self.say(owner,'Codex stopped before completing this response. Check the local conversation; no automatic rerun.')
     def run(self):

@@ -1,79 +1,49 @@
-# Telegram and Codex conversation transport
+# Telegram interface to Codex
 
-## Normal Codex recovery (18 October 2026; latest)
+Persistent mode is the supported student interface. Telegram supplies text to one saved Codex conversation in this project; the existing Python editor remains unchanged. It is separate from the open desktop chat. It does not install that desktop chat's browser tools/plugins or guarantee identical capabilities.
 
-Framing diagnosis correction: several people in a source shot do not automatically require a union box. The conversation must evaluate reviewed primary-subject targets over time, with existing easing and scene-cut resets, before declaring the passage impossible. Sequential focus must preserve meaning; indispensable simultaneous action and full required subject bounds are not waived. On single-pass jobs, minor visual flags are inspected once and disclosed rather than becoming automatic source rejection. Saved editorial-blocker notes may be reassessed, but never deleted or relabeled as a quality pass without actual source review. This changes planning guidance, not source pixels, geometry, caption design or technical/publication safeguards.
+## Student setup
 
-Persistent mode is a conversational interface, not a separate workflow runner. The former instruction forbidding source/configuration changes during clipping has been removed. Codex may inspect errors, make minimal reversible local repairs, run tests and resume the saved successful stage in the same turn on performance-optimization. It must not defer routine debugging to the desktop just because the request arrived through Telegram. Existing editor, captions, review, native-audio rules, credentials and publication restrictions remain intact. Genuine human-only consent, missing credentials, unavailable capabilities and unresolved required editorial evidence still stop work; network recovery remains bounded. Recovery is an agent capability, not a guarantee every failure can be repaired automatically.
-
-Completed assistant commentary now returns to the initiating Telegram user as progress, once per message, with the same secret redaction as final replies. Raw shell/tool output is never forwarded. Text remains verbatim and uses the same saved dedicated conversation. This does not expose the exact desktop chat or automatically install its browser/plugins. Restart the idle owned server and relay after changing developer instructions so a loaded session cannot retain the old restrictions; preserve the thread receipt/history and never interrupt an active turn for a configuration update.
-
-**Current operational mode:** the owner-approved persistent conversation (see the last section) is connected and its message/reply test passed. The exact existing desktop-chat mode remains unavailable. Do not confuse these modes.
-
-This optional relay forwards private owner text verbatim with the installed official `codex queue --thread UUID --message TEXT`. It never launches `codex exec`, creates a thread, assembles an editorial prompt, picks a model, changes permissions or changes the clipping engine. Use a fixed UUID, never the most recent session or a guessed chat name. The existing conversation determines what the message means and asks for clip count/approval normally.
-
-## Current verification boundary
-
-The installed CLI exposes queue. The official documentation describes queuing to existing sessions: https://developers.openai.com/codex/cli/reference . The app-server protocol documents read-only `thread/read`: https://developers.openai.com/codex/app-server .
-
-Diagnosis and fixes (18 October 2026): the desktop-bundled CLI could not install a daemon because it lacks a complete local package. An isolated official npm `@openai/codex@0.163.0` package was installed under ignored tools/vendor/codex-relay; the desktop binary was untouched. A bounded shared-daemon start succeeded. The old proxy implementation incorrectly sent JSONL: the Unix control endpoint actually requires an HTTP Upgrade and WebSocket framing. The relay now wraps the official raw-byte proxy with websockets through an in-process socketpair; it opens no public listener and works with Windows Python builds lacking AF_UNIX.
-
-A real initialize + thread/read succeeded without generation, resume or queueing. The exact desktop chat was returned as **notLoaded**. This means the new shared daemon has saved history, not the live desktop execution. The relay rejects notLoaded, missing status, systemError and mismatched thread IDs. A saved ID alone never establishes live delivery. **Same-desktop-chat delivery remains unavailable in this tested setup; the relay must remain stopped.** The shared daemon installed solely for diagnosis is stopped afterward.
-
-Do not resume this active desktop thread into a second server to manufacture readiness. The owner must explicitly agree to a persistent server-hosted conversation/handoff (different from the requested live-window transport), or use a supported desktop input connection if one becomes available. No replacement thread, model request, UI keystroke injection, secret-store access or private session-file modification is authorized by a failed check. Starting a daemon alone does not fix desktop message routing.
-
-## Private configuration
-
-In the ignored `.env` set your own TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USER_IDS (comma-separated positive numeric IDs), actual executable TELEGRAM_CODEX_PATH and TELEGRAM_CODEX_THREAD_ID. Empty TELEGRAM_ALLOWED_USER_IDS retains the single-owner TELEGRAM_ALLOWED_USER_ID behavior. All listed users can send instructions into the SAME shared Codex conversation, with that conversation's permissions and context; this is not tenant isolation. Only explicitly trusted users belong on the allowlist. Do not post real IDs in public examples. Never commit or print credentials. The earlier credentials were removed at the owner's request; re-enter them privately. Keep the old job controller and its startup task stopped. This relay shares its singleton lock to prevent competing pollers.
+1. Clone the performance-optimization branch and open it in Codex. Say onboarding. Follow ONBOARDING.md for the CPU environment, FFmpeg/ffprobe, yt-dlp runtime and local speech models.
+2. Enter your own TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_USER_IDS privately in this clone's ignored .env. Never copy the creator's credentials, connection receipt, jobs, media, approvals or publication state. Zernio credentials are not required to clip a supplied URL.
+3. Install requirements-telegram.txt in the project environment. Use an official complete Codex CLI with your own ChatGPT login, not API-key authentication. If the desktop-bundled CLI cannot start the shared server, install the official @openai/codex npm package in tools/vendor/codex-relay and configure its actual executable in TELEGRAM_CODEX_PATH. Windows .cmd/.bat/.ps1 wrappers are not accepted as the executable. Onboarding Codex can locate the installed codex.exe; no creator-specific path is distributed.
+4. Start the owned official app-server daemon with REEL_PUBLICATION_DISABLED=true and no AI API-key/provider overrides. This never enables billing. Do not stop another project's active server. Verify the isolated server supports the installed official protocol.
+5. Start the persistent relay. The first connection creates its own conversation; later clean starts resume that same ID and history. It never silently resumes the desktop conversation.
 
 ```powershell
-.venv/Scripts/python.exe telegram_relay.py doctor
-# Only when the exact existing session is reachable and configured:
-.venv/Scripts/python.exe telegram_relay.py run
-```
-
-Install the optional transport dependency with `python -m pip install -r requirements-telegram.txt`. Doctor uses initialize and thread/read over WebSocket via the already-running server proxy. No model generation, turn start, Telegram request or message queueing occurs. A missing/unreachable server fails closed. Run never starts or enables a daemon, Windows task, remote endpoint or billing.
-
-This first version is **incoming text only**. Replies, file attachments and operating-system consent stay in Codex. It sends a fixed Telegram queue acknowledgement, never a fabricated assistant answer. A complete two-way Telegram frontend is not yet implemented. No transcripts, session history, credentials, tools or ordinary logs are forwarded to Telegram. Queue messages are passed literally as one process argument; do not send secrets through Telegram (the OS can expose process arguments locally).
-
-Only explicitly allowlisted users in their matching private chats are allowed. Groups, nonmembers, bot senders and sender/chat mismatches are rejected. Each fixed acknowledgement is sent only to the initiating sender, never broadcast. Relay state binds the exact allowlist and session; changing either requires local reconciliation and does not silently reassign existing delivery records. Offset is persisted before delivery. No automatic resend after an uncertain delivery, timeout or restart. Check the Codex conversation before manually resending. Historical updates are discarded once on first startup. Text is not rewritten into a URL-only clipping command. Attachments are rejected explicitly. A failed notification may leave a queued message visible only in Codex. The app must be running/connected and the PC awake/online.
-
-All existing workflow/publication approval rules remain unchanged. A Telegram setup or arbitrary sender is never standing permission to publish. This file introduces no editorial policy and no promised timing improvement.
-
-
-## Approved persistent conversation mode (18 October 2026)
-
-The owner explicitly approved a persistent Telegram-connected Codex conversation after the live desktop limitation was verified. `python telegram_relay.py run --persistent` uses one new server-hosted conversation in this same project. This is intentionally separate from the desktop chat. It does not fork, resume or migrate the active desktop conversation. The private receipt is workflow/telegram/persistent-conversation.json; do not copy it, the .env or live messages to a student clone.
-
-The background process keeps its official WebSocket connection open. It creates the dedicated thread once and resumes only its own recorded ID on later clean starts. It forwards incoming text verbatim, sequentially, to that conversation; questions and final assistant answers return only to the initiating private user. All four approved users share the same context and permissions, not isolated projects. Owner allowlists remain private. Raw tool output and stderr are never mirrored. Known credential values and key patterns are redacted from assistant replies. Preview-only developer instructions and REEL_PUBLICATION_DISABLED in the owned daemon environment prohibit Instagram publication.
-
-The CLI uses the existing ChatGPT login; no separate paid API key/provider/model is introduced. The default account model remains unchanged. Python/Whisper/OpenCV/FFmpeg rendering stays CPU-only with the existing AGENTS.md workflow and exact output rules. General messages and count answers do not become forced clipping commands. No source code, styling, workflow tests or editorial rules are modified by this transport. Interactive-only approval requests fail for local review; the relay never automatically consents.
-
-Only real hash-verified `workflow/jobs/CLIP/reel.mp4` exports with saved passing technical checks and Needs approval state may be sent as video previews. Oversized files remain local. Video upload is attempted at most once automatically per user/render hash; an uncertain upload is not silently repeated. Nothing is posted on Instagram.
-
-Run preparation (on this machine it has been completed, not a command to run repeatedly):
-
-```powershell
-python -m pip install -r requirements-telegram.txt
+.venv/Scripts/python.exe -m pip install -r requirements-telegram.txt
+# Optional official local CLI provisioning when no complete CLI is installed:
 npm install --prefix tools/vendor/codex-relay --no-audit --no-fund @openai/codex@0.163.0
-# Select the installed actual codex.exe privately in TELEGRAM_CODEX_PATH.
-# Start the owned daemon with preview-only environment and no API-key variables.
+# Configure the actual CLI executable privately, then start the owned daemon:
 $env:REEL_PUBLICATION_DISABLED='true'
 node tools/vendor/codex-relay/node_modules/@openai/codex/bin/codex.js app-server daemon start
-python telegram_relay.py run --persistent
+.venv/Scripts/python.exe telegram_relay.py run --persistent
+# In another terminal, read-only reachability diagnostics:
+.venv/Scripts/python.exe telegram_relay.py doctor --persistent
 ```
 
-This setup uses no Windows startup task. Keep the PC awake, online and the background processes running. The desktop window need not stay open for the dedicated conversation. A new process discards historical Telegram commands only on first initialization. On restart with an active recorded turn, it stops for local reconciliation rather than assuming the job ended or retrying it. Transient polling failures use bounded backoff; authorization errors and conflicting pollers stop. Messages saved before a clean shutdown remain queued privately, with update offsets preventing automatic duplicates. Never run legacy telegram_bot.py or the exact-desktop relay simultaneously.
+Keep the PC awake, online and the background processes running. A daemon must already be running; the relay never installs or starts it implicitly. No startup task is installed automatically. tools/telegram_startup.ps1 optionally registers persistent mode at logon, and requires the daemon already available; legacy controller startup now requires explicit -LegacyController. Do not run competing pollers.
 
-Actual live setup: official complete CLI 0.163.0 installed; owned shared daemon started with publication disabled; persistent thread created successfully without generation; four-user allowlist and long polling initialized. A harmless Telegram message/reply test and real source clipping must be identified separately from setup and mocked tests. No YouTube download or Instagram publication was performed during connection repair.
+## Automatic routine decisions
 
-Live transport test completed: the owner sent the requested connection-test message in Telegram; the exact prompt was present in the dedicated Codex session, the model returned exactly connected, and the Telegram send completed while the controller remained ready. This consumed one Codex-account turn (27,832 input tokens, including 13,440 cached; 5 output). No AI API key, YouTube transfer, Reel render or Instagram publication was used in this test. A real clipping run through this persistent transport has not yet been tested.
+Send a URL or ordinary instructions through Telegram. Incoming text is forwarded verbatim. An explicit clip count wins; otherwise TELEGRAM_DEFAULT_CLIPS=1. Do not ask routine questions about counts, another moment or ordinary local recovery. When a candidate genuinely cannot work, automatically try up to TELEGRAM_RESELECTION_ATTEMPTS=2 replacement candidates per requested clip (valid 0-2). Reuse successful stages and verify/review changed passages normally. These are agent instructions, not a guarantee of model compliance or unlimited recovery. Missing required consent/credentials/tools or exhausted alternatives produces a precise needs_action/needs_attention report without another routine question. Never bypass actual editorial evidence to avoid reporting a blocker.
 
+Codex may diagnose errors, apply minimal reversible local repairs on performance-optimization, run tests and resume in the same turn. It does not defer ordinary debugging to the desktop. It preserves existing captions, CTA, audio, quality, native speech, review and publication rules. Multiple characters do not automatically require a union box; assess reviewed primary subjects over time and preserve meaning. Indispensable simultaneous action is not waived. Single-pass minor flags are inspected once and disclosed rather than forcing repeated reviews. Actual required subject bounds cannot be invented or narrowed to pass.
 
-## Student .env and runtime detection
+Each turn checks this clone's .env presence and exact project Python runtime; secrets never enter the setup summary. TELEGRAM_PYTHON_PATH may explicitly select another verified existing environment. No parent-project credential search is permitted. Reuse working dependencies/models; do not repeat onboarding because an unrelated PATH Python lacks packages. Human-only logins, terms, CAPTCHA and private credential entry still need the owner locally. The transport cannot consent for a student.
 
-The student sets their own private credentials locally in this clone once. The persistent session reads a fresh setup snapshot before every message, including .env presence, configured-key booleans, the project Python interpreter, saved-channel presence, and read-only reel.py doctor results. Secret values are used only by existing project commands and in-memory outgoing redaction, never included in model-visible setup summaries. Editing commands are unchanged.
+## Reliability and privacy
 
-Use `.venv/Scripts/python.exe` from this checkout; TELEGRAM_PYTHON_PATH can explicitly select an already installed environment. No automatic parent-directory secret search or cross-student credential import occurs. Missing packages are tested in that exact interpreter. A configured environment/model cache skips duplicate onboarding and installation. Zernio/Instagram is optional for URL clipping. A saved channel is needed only for channel triggers. If actual credentials are absent, the bot names the missing fields and directs the student to the local private editor; it never requests tokens/passwords in Telegram.
+Only allowlisted users in matching private chats are accepted. All users on one relay share one context and project; this is not multi-tenant isolation. /status reports current activity and queue size. Questions are not needed for routine editorial decisions. Completed assistant commentary and final replies return only to the initiating sender. Raw shell output, stderr and credentials are not mirrored. Replies are redacted and split using Telegram's UTF-16 text length limit.
 
-Owner-machine repair: this working checkout's incomplete environment was preserved privately and replaced with a local junction to the owner's existing CPU environment. Three missing credential entries were restored from the same owner's original local project by explicit user request. This is private local repair, not a student template/default or export. No secret, absolute owner environment path, connection or approval is distributed to students.
+Offsets, queued messages and active turn IDs are private and persisted before work. Duplicate updates do not duplicate turns. Polling has bounded backoff, respects retry_after and stops on authorization/conflicting-poller errors. Failed progress/final text delivery records a safe diagnostic and does not abort the Codex turn or falsely claim delivery. Ambiguous sends are not retried automatically, to avoid duplicates. Check /status and the saved conversation if a message is missing.
+
+A recorded active turn after a crash requires reconciliation rather than an automatic duplicate run. Human-only permission requests are never automatically approved. Configuration/developer instruction updates require reloading the idle owned server and relay; preserve the conversation receipt and never interrupt an active turn for reload. Local tests are not proof every network/provider error can be repaired.
+
+Only actual hash-verified workflow/jobs/CLIP/reel.mp4 exports with passing technical checks and Needs approval status may be sent as previews. Video upload is attempted at most once per sender/render hash automatically. Oversized files remain local, and uncertain uploads are reported without duplication. Incoming Telegram file attachments are not supported yet. This transport is preview-only: it never publishes to Instagram or creates approval.
+
+## Verification boundary
+
+The official CLI/proxy connection uses WebSocket framing, bridged through a local socketpair on Windows Python builds lacking AF_UNIX. No public listener is opened. A live text round trip and a harmless shell/image tool probe passed on the owner machine. Those do not prove an entire Reel completed through Telegram. Provider rate limits, unavailable videos, impossible essential framing and missing human-only evidence can still stop a request safely. A new student installation must run its own diagnostics and harmless connection test.
+
+The earlier telegram_bot.py controller and exact-desktop-thread queue prototype remain available for compatibility but are not the default interface. Same-desktop delivery was unavailable in the tested setup; the owner explicitly approved the dedicated persistent conversation. Do not follow old prototype setup as if it were the supported persistent path.

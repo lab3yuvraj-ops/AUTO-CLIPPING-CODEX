@@ -30,7 +30,7 @@ class API:
         return self.call('getUpdates',{'offset':offset,'timeout':timeout,'allowed_updates':'["message"]'})
 
     def text(self, chat, text):
-        # Callers pass constant status strings; never model output or stderr.
+        # The persistent frontend passes redacted assistant text; never raw stderr.
         return self.call('sendMessage',{'chat_id':chat,'text':text[:4000]})
 
     def video(self, chat, path):

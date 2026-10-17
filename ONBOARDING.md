@@ -28,6 +28,8 @@ Do not overwrite an existing `.env`. This workflow currently uses Windows proces
 
 ## Connect your accounts
 
+For the optional Telegram interface, follow [the current persistent-conversation setup](docs/TELEGRAM-RELAY.md), not the legacy job controller. Codex configures the student's own private token/allowlist and complete official CLI. Telegram defaults to one clip, honors explicit counts and selects bounded replacement moments without routine questions. Missing human-only login/terms/credentials still require the student locally; no secret belongs in Telegram. No daemon, logon task or real generation is started by documentation or mocked tests alone.
+
 1. Tell Codex which YouTube channel URL or channel ID to use. Public channel lookup requires no YouTube API key.
 2. Connect your own Instagram account in Zernio. Enter `ZERNIO_API_KEY` and `ZERNIO_INSTAGRAM_ID` in the private local `.env` editor. The ID is Zernio's connected account `_id`, not your Instagram username or numeric Instagram ID. Never paste secrets into chat or commit them. [Zernio account connection guide](https://docs.zernio.com/guides/connecting-accounts), [account verification API](https://docs.zernio.com/accounts/list-accounts).
 3. Run the following, replacing `CHANNEL_URL_OR_ID`:

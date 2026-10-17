@@ -109,3 +109,38 @@ def test_permission_requests_still_require_human_action(tmp_path):
     c.event({'id':99,'method':'item/commandExecution/requestApproval','params':{'threadId':c.data['thread']}})
     assert sent[0]['error']['code']==-32601
     assert 'No permission was granted automatically' in api.messages[0][1]
+
+
+def test_no_routine_questions_default_count_and_bounded_alternatives(tmp_path):
+    c,_=controller(tmp_path);instructions=c.thread_params()['developerInstructions']
+    assert 'Do not ask routine questions, including clip count' in instructions
+    assert 'Telegram default clip count: 1.' in instructions
+    assert 'Maximum replacement candidates per requested clip: 2.' in instructions
+    assert 'Honor an explicit count' in instructions
+    assert 'Never publish' in instructions
+
+
+def test_notification_failure_does_not_abort_codex_or_claim_delivery(tmp_path):
+    from telegram_bridge.api import TelegramError
+    c,api=controller(tmp_path);c.data['active']={'owner':42,'turn':'turn-1'}
+    def fail(*args):raise TelegramError(429,7)
+    api.text=fail
+    c.event({'method':'item/completed','params':{'threadId':c.data['thread'],
+        'item':{'type':'agentMessage','phase':'commentary','text':'Continuing local repair'}}})
+    assert c.data['active'] and not c.failed.is_set()
+    c.reply='Done'
+    c.event({'method':'turn/completed','params':{'threadId':c.data['thread'],
+        'turn':{'id':'turn-1','status':'completed'}}})
+    assert c.data['active'] is None
+    assert c.data['last_delivery']['telegram_reply_confirmed'] is False
+    assert c.data['last_notification_error']['retry_after']==7
+    assert c.data['last_notification_error']['automatic_resend'] is False
+    assert 'Done' not in json.dumps(c.data['last_notification_error'])
+
+
+def test_unicode_progress_chunks_preserve_text_and_telegram_limits():
+    from telegram_bridge.persistent import message_chunks
+    text='hello '+'\U0001f600'*3900+' done'
+    chunks=list(message_chunks(text))
+    assert ''.join(chunks)==text and len(chunks)>1
+    assert all(len(c.encode('utf-16-le'))//2<=3900 for c in chunks)

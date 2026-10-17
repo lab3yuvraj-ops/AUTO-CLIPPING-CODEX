@@ -48,3 +48,13 @@ def test_next_message_refreshes_setup_and_keeps_text_verbatim(tmp_path):
     assert calls[0][1]['threadId']=='own-thread'
     assert calls[1][1]['input']==[{'type':'text','text':'One'}]
     assert c.data['active']['turn']=='new-turn'
+
+
+def test_telegram_automatic_defaults_are_configurable_and_bounded(tmp_path,monkeypatch):
+    import pytest
+    monkeypatch.setenv('TELEGRAM_DEFAULT_CLIPS','2')
+    monkeypatch.setenv('TELEGRAM_RESELECTION_ATTEMPTS','1')
+    cfg=Config.load(tmp_path)
+    assert cfg.default_clips==2 and cfg.reselection_attempts==1
+    monkeypatch.setenv('TELEGRAM_RESELECTION_ATTEMPTS','99')
+    with pytest.raises(ValueError,match='numeric configuration'):Config.load(tmp_path)
