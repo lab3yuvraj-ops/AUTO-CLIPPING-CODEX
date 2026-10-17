@@ -1,10 +1,13 @@
 import time
+import os
 import httpx
 from .config import settings
 from .errors import StageError,PublishUncertain
 BASE="https://zernio.com/api/v1"
 
 def request(method,path,*,payload=None,params=None,key=None):
+    if os.environ.get('REEL_PUBLICATION_DISABLED','').lower()=='true' and method.upper() not in ('GET','HEAD'):
+        raise StageError('Publishing writes are disabled for this preview-only controller run.',False)
     if not settings.zernio_api_key:
         raise StageError('Set ZERNIO_API_KEY in the private .env to publish to Instagram.',False)
     headers={'Authorization':'Bearer '+settings.zernio_api_key}

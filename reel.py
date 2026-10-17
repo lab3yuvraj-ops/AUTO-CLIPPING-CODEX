@@ -421,6 +421,8 @@ def _render(ident,edit_path,keep_lossless=False,threads=None):
             interval['cached']=job['final_mp4_review']['cache_reused']
     job.pop('approval',None);save(path,job);return job
 def publish(ident,confirmed=False):
+    if os.environ.get('REEL_PUBLICATION_DISABLED','').lower()=='true':
+        raise ValueError('Instagram publication is disabled for this preview-only controller run.')
     path=job_path(ident);job=read(path)
     if job.get('post_id'):return job
     if not confirmed:raise ValueError('Use --confirmed only after the user says “good to go” for this exact render.')
