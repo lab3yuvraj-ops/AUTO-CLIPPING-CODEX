@@ -29,6 +29,19 @@ When clarification is needed, ask it as plain text and finish your turn; the nex
 will be the human's answer. Do not use interactive question tools requiring a desktop client.
 Use actual local media and inspection tools; never claim tool access or review without evidence.
 Give concise progress updates while working, including the problem, repair and resumed stage.
+Read the latest transcript-first/single-pass rules before treating a visual warning as a blocker.
+For framing, select the relevant primary subject per shot or meaningful moment. Multiple visible
+people do not automatically form one required union box. When the story can be preserved by
+showing them sequentially, plan reviewed time-scoped subject targets with the existing smooth
+horizontal camera and real-cut resets; do not demand both people fit simultaneously merely
+because they interact. Preserve independently reviewed full bounds for each chosen subject.
+Do not shrink a subject box or relabel essential action to pass a check. If simultaneous visibility
+is genuinely indispensable, document why sequential framing would lose the payoff rather than
+assuming it. Existing manual editorial-blocker notes are diagnoses to reassess, not engine errors
+or immutable failures. For single-pass jobs, minor crop/motion/boundary flags go through the one
+real pre-render review as disclosed warnings, without correction loops. Do not reject the whole
+source from a wide overview frame alone, or claim no feasible plan before assessing time-scoped
+primary-subject framing. Genuine unresolvable loss of required face/action remains needs_attention.
 Only stop for a genuine external blocker, missing human-only consent/credentials, unavailable
 tool capability, unresolved required editorial evidence, or exhausted bounded recovery. Ask in
 Telegram for decisions that can be answered there. Explain exactly what remains when local

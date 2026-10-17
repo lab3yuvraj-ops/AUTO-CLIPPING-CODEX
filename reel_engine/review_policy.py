@@ -35,6 +35,10 @@ def choose_policy(job,spec,checks):
     tracking=spec.get('tracking',{})
     if single_pass(job):
         return {'policy':'single-pass','reason':'User requested one compact pre-render visual pass, accepting minor visual defects without correction/review loops.',
+            'framing_guidance':{'multiple_people_require_union_box':False,
+                'focus':'Reviewed primary subject per shot or meaningful moment; sequential focus when it preserves the story.',
+                'minor_visual_flags':'Inspect once and disclose; no automatic rejection or correction loop.',
+                'limits':'Keep independent full subject bounds. Do not hide genuinely lost faces or essential simultaneous action.'},
             'full_first_pass':False,'pre_render_zero_flags':bool(checks.get('passed')),
             'baseline_required':True,'later_rounds':'none; explicit user revision only','correction_cap':0,
             'spec_sha256':spec_hash(spec),'source_sha256':job.get('source_sha256'),

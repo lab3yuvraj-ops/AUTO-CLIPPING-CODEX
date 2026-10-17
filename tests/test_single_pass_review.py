@@ -9,6 +9,15 @@ def test_single_pass_policy_does_not_claim_visual_quality_pass():
     policy=choose_policy({'review_mode':'single-pass','source_sha256':'h'},{'tracking':{}},{'passed':False})
     assert policy['policy']=='single-pass' and not policy['pre_render_zero_flags']
     assert policy['baseline_required'] and policy['correction_cap']==0
+    assert policy['framing_guidance']['multiple_people_require_union_box'] is False
+    assert 'independent full subject bounds' in policy['framing_guidance']['limits']
+
+
+def test_legacy_review_does_not_inherit_single_pass_warning_policy():
+    from reel_engine.review_policy import choose_policy
+    policy=choose_policy({'source_sha256':'h'},{'tracking':{}},{'passed':False})
+    assert policy['policy']!='single-pass'
+    assert 'framing_guidance' not in policy
 
 
 def test_repeat_visual_review_reuses_receipt_and_changed_spec_cannot_loop(tmp_path,monkeypatch):

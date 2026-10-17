@@ -96,6 +96,9 @@ def test_conversation_allows_tested_local_recovery_without_relaxing_guards(tmp_p
     assert 'bounded recovery' in instructions and 'never accept translated/dubbed tracks' in instructions
     assert 'Never publish' in instructions and 'Never modify main' in instructions
     assert 'change source code/configuration, install services' not in instructions
+    assert 'do not automatically form one required union box' in instructions
+    assert 'Do not shrink a subject box' in instructions
+    assert 'one\nreal pre-render review' in instructions
 
 
 def test_permission_requests_still_require_human_action(tmp_path):
