@@ -15,6 +15,7 @@ def build(root=ROOT):
     paths.append(root/'assets'/'cta'/'watch-full-video.mp4')
     paths.extend(root/name for name in ('tools/setup_local.ps1','tools/setup_youtube_po.ps1','requirements-youtube-po-token.txt'))
     paths.append(root/'telegram_bot.py')
+    paths.append(root/'telegram_relay.py')
     paths.append(root/'tools/telegram_startup.ps1')
     paths.extend((root/'telegram_bridge').glob('*.py'))
     paths.extend(root/'tools'/name for name in ('benchmark_preparation.py','replay_preparation.py','replay_review_checks.py','apply_cleanup.ps1'))
