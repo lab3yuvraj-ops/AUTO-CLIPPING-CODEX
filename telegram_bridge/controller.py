@@ -5,7 +5,7 @@ import time
 import uuid
 from pathlib import Path
 from .storage import atomic_json
-from .runner import source_url, WorkflowError
+from .runner import source_url, WorkflowError, PUBLIC_FAILURES
 from .api import TelegramError
 
 TRIGGERS={'analyze my youtube','analyse my youtube','analyze youtube','youtube analyze'}
@@ -48,7 +48,7 @@ class Controller:
                 return
             if text.lower()=='/status':
                 status=request['status'] if request else 'idle'
-                self.say('Current request: '+status+'.'+(' Reconcile the recorded worker locally before starting another job.' if status=='interrupted' else ''))
+                self.say('Current request: '+status+'.'+(' '+PUBLIC_FAILURES[request['failure_code']] if request and request.get('failure_code') in PUBLIC_FAILURES else '')+(' Reconcile the recorded worker locally before starting another job.' if status=='interrupted' else ''))
                 return
             if request and request['status'] in ('running','interrupted','sending'):
                 self.say('A workflow or delivery is already active or awaiting local reconciliation. No second job was launched.')
@@ -108,8 +108,12 @@ class Controller:
             with self.lock:
                 r=self.data['request']
                 if r['status'] not in ('delivery_uncertain','sending'):
-                    r['status']='failed';r['failure_category']=type(error).__name__;self.save()
-            self.say('Workflow failed or requires human attention. No result was accepted or published. Check the private request and job records locally; /status is available. No automatic rerun.')
+                    r['status']='failed';r['failure_category']=type(error).__name__
+                    code=error.public_code if isinstance(error,WorkflowError) else None
+                    if code:r['failure_code']=code
+                    self.save()
+            code=error.public_code if isinstance(error,WorkflowError) else None
+            self.say(PUBLIC_FAILURES.get(code,'Workflow failed or requires human attention. No result was accepted or published. Check the private request and job records locally; /status is available. No automatic rerun.'))
 
     def start_delivery(self):
         self.data['request']['status']='sending';self.save()

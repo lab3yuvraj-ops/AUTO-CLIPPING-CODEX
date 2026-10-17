@@ -280,3 +280,38 @@ def test_code_mode_audit_requires_real_image_event_in_exact_session(tmp_path,mon
     assert not session_tool_evidence(config(tmp_path),tid,tmp_path/'other.png')['image_review_observed']
     rows[0]['payload']['cwd']=str(tmp_path/'wrong-project');path.write_text('\n'.join(json.dumps(x) for x in rows))
     assert not any(session_tool_evidence(config(tmp_path),tid,image).values())
+
+def test_rate_limit_classification_requires_matching_fresh_job(tmp_path):
+    from telegram_bridge.runner import explain_attention
+    result,request=validated_family(tmp_path)
+    path=tmp_path/'workflow/jobs'/result['source_job']/'job.json'
+    record=json.loads(path.read_text());record['error']='YouTube HTTP 429 SECRET';atomic_json(path,record)
+    assert explain_attention(config(tmp_path),result,request,99,set())=='youtube_rate_limited'
+    assert explain_attention(config(tmp_path),result,request,101,set()) is None
+    assert explain_attention(config(tmp_path),result,request,99,{result['source_job']}) is None
+    request['url']='https://www.youtube.com/watch?v=xxxxxxxxxxx'
+    assert explain_attention(config(tmp_path),result,request,99,set()) is None
+
+
+def test_safe_failure_reason_persists_for_status_without_raw_error(tmp_path):
+    class Limited(FakeRunner):
+        def run(self,*args):raise WorkflowError('SECRET raw provider text',public_code='youtube_rate_limited')
+    api=FakeAPI();c=Controller(config(tmp_path),api,Limited())
+    c.handle(update(1,'https://youtu.be/abcdefghijk'));c.handle(update(2,'1'));finish(c)
+    assert c.data['request']['failure_code']=='youtube_rate_limited'
+    assert 'HTTP 429' in api.messages[-1][1] and 'SECRET' not in str(api.messages)
+    c.handle(update(3,'/status'));assert 'HTTP 429' in api.messages[-1][1]
+    assert WorkflowError('SECRET',public_code='SECRET').public_code is None
+
+def test_preparation_failure_reported_before_image_guard_without_accepting_output(tmp_path,monkeypatch):
+    from telegram_bridge import runner
+    cfg=config(tmp_path)
+    def failed_run(config,folder,prompt,schema,progress,started):
+        ident='abcdefghijk-transcript-new'
+        atomic_json(tmp_path/'workflow/jobs'/ident/'job.json',{'created':time.time()+1,'requested_clips':1,'video_id':'abcdefghijk','error':'YouTube HTTP 429'})
+        return {'status':'needs_attention','source_job':ident,'clips':[]},{'shell_observed':True,'image_review_observed':False}
+    monkeypatch.setattr(runner,'require_probe',lambda c:None)
+    monkeypatch.setattr(runner,'run_codex',failed_run)
+    with pytest.raises(WorkflowError) as exc:
+        runner.Runner(cfg).run({'id':'test','count':1,'url':'https://www.youtube.com/watch?v=abcdefghijk'},lambda _:None,lambda _:None)
+    assert exc.value.public_code=='youtube_rate_limited'

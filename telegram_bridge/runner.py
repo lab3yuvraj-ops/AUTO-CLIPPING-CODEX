@@ -14,7 +14,33 @@ from urllib.request import url2pathname
 from .storage import atomic_json
 
 
-class WorkflowError(Exception): pass
+PUBLIC_FAILURES={
+    'youtube_rate_limited':'YouTube rate-limited this connection (HTTP 429) before preparation could finish. No video was rendered or published. No automatic retry: wait before sending the URL again. If it persists, check the local downloader/network configuration in Codex.',
+}
+
+
+class WorkflowError(Exception):
+    def __init__(self, message, *, public_code=None):
+        super().__init__(message)
+        self.public_code=public_code if public_code in PUBLIC_FAILURES else None
+
+
+def explain_attention(config, result, request, launched, previous):
+    """Classify only a new request-bound job; never forward its raw error."""
+    ident=result.get('source_job','')
+    if not re.fullmatch(r'[A-Za-z0-9_-]{11,64}',ident) or ident in previous:return None
+    try:
+        record=json.loads((config.root/'workflow/jobs'/ident/'job.json').read_text())
+        if record.get('created',0)<launched or record.get('requested_clips')!=request['count']:return None
+        if request.get('url'):
+            if record.get('video_id')!=request['url'].split('v=')[1]:return None
+        else:
+            connection=json.loads((config.root/'workflow/connection.json').read_text())
+            if record.get('metadata',{}).get('channel_id')!=connection.get('channel_id'):return None
+        error=str(record.get('error','')).lower()
+        if '429' in error and ('youtube' in error or 'yt-dlp' in error):return 'youtube_rate_limited'
+    except (OSError,ValueError,TypeError):return None
+    return None
 
 
 def source_url(text):
@@ -274,6 +300,9 @@ class Runner:
         watcher=threading.Thread(target=observe,daemon=True);watcher.start()
         try:result, evidence=run_codex(config,folder,prompt_for(config,request),RESULT_SCHEMA,progress,started)
         finally:stopped.set();watcher.join(timeout=6)
+        if result.get('status')=='needs_attention':
+            code=explain_attention(config,result,request,launched,previous)
+            raise WorkflowError('Workflow needs human attention; no output accepted.',public_code=code)
         if not evidence['shell_observed'] or not evidence['image_review_observed']:
             raise WorkflowError('Required shell/image-review tool calls were not observed; open Codex for review.')
         return accept_outputs(config,result,request,launched,previous)
