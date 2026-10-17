@@ -5,7 +5,7 @@ from pathlib import Path
 from contextlib import nullcontext
 from . import youtube
 from .caption_errors import CaptionFetchError,classify_caption_failure
-from .youtube_transcript import atomic_json,parse_json3
+from .youtube_transcript import atomic_json,parse_json3,caption_matches_audio
 
 
 def uploaded_language(info):
@@ -52,10 +52,14 @@ def fetch_uploaded_captions(ident,root,duration,info=None,timing_hook=None,sleep
         saved=json.loads(receipt.read_text())
         if saved.get('video_id')==ident:
             if saved.get('failure'):raise CaptionFetchError(saved['failure'])
-            if draft.exists():return json.loads(draft.read_text(encoding='utf-8'))
+            if draft.exists():
+                data=json.loads(draft.read_text(encoding='utf-8'))
+                if not caption_matches_audio(data.get('language'),info):
+                    raise CaptionFetchError(classify_caption_failure('Saved caption language contradicts original audio metadata; use local original-audio transcription.'))
+                return data
     if not fresh_captions and record.exists() and payload.exists():
         saved=json.loads(record.read_text());raw=payload.read_bytes()
-        if saved.get('caption_kind')=='uploaded' and saved.get('format')=='json3' and saved.get('video_id')==ident and saved.get('source_duration')==float(duration) and saved.get('sha256')==hashlib.sha256(raw).hexdigest():
+        if saved.get('caption_kind')=='uploaded' and saved.get('format')=='json3' and saved.get('video_id')==ident and saved.get('source_duration')==float(duration) and saved.get('sha256')==hashlib.sha256(raw).hexdigest() and caption_matches_audio(saved.get('language'),info):
             with timing_hook('caption_cache_hit') if timing_hook else nullcontext() as timing:
                 if timing is not None:timing['cached']=True
                 body=json.loads(raw);body['language']=saved['language'];data=parse_json3(body,duration)

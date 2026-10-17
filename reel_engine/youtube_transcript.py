@@ -5,6 +5,14 @@ from pathlib import Path
 from . import youtube
 
 
+def caption_matches_audio(language,info):
+    """Reject contradictory native-language metadata, including cached tracks."""
+    native=(info or {}).get('language')
+    if not native:return True  # No new evidence; never claim language verification.
+    base=lambda value:str(value or '').replace('_','-').lower().split('-')[0]
+    return base(language)==base(native)
+
+
 def atomic_json(path, value):
     temporary=path.with_suffix('.tmp')
     temporary.write_text(json.dumps(value,ensure_ascii=False,indent=2),encoding='utf-8')
@@ -53,8 +61,9 @@ def fetch_caption_draft(ident, root, duration, info=None,require_uploaded=False,
         return fetch_uploaded_captions(ident,root,duration,info,timing_hook,fresh_captions=fresh_captions,max_attempts=max_attempts,on_failure=on_failure,stop_wait=stop_wait)
     root=Path(root);root.mkdir(parents=True,exist_ok=True)
     draft=root/'youtube-transcript.json';failure=root/'caption-fetch-failure.json'
-    if draft.exists() and json.loads(draft.read_text(encoding='utf-8')).get('video_id')==ident:
-        return json.loads(draft.read_text(encoding='utf-8'))
+    if draft.exists():
+        cached=json.loads(draft.read_text(encoding='utf-8'))
+        if cached.get('video_id')==ident and caption_matches_audio(cached.get('language'),info):return cached
     if failure.exists():
         saved=json.loads(failure.read_text(encoding='utf-8'))
         if saved.get('video_id')==ident and time.time()<saved.get('retry_after',0):
@@ -74,14 +83,12 @@ def _fetch_caption_draft(ident, root, duration, info=None):
     root=Path(root);started=time.perf_counter();draft=root/'youtube-transcript.json'
     if draft.exists():
         cached=json.loads(draft.read_text(encoding='utf-8'))
-        if cached.get('video_id')==ident:return cached
+        if cached.get('video_id')==ident and caption_matches_audio(cached.get('language'),info):return cached
     if info is None:
         info=json.loads(youtube.ytdlp(['--skip-download','--dump-single-json',f'https://www.youtube.com/watch?v={ident}'],timeout=90))
     automatic=info.get('automatic_captions',{})
-    originals=[k for k in automatic if k.endswith('-orig')]
-    native=(info.get('language') or '').split('-')[0]
-    language=next((k for k in originals if native and k.split('-')[0]==native),
-                  next((k for k in originals if k.startswith('hi')),next(iter(originals),None)))
+    from .selection_draft import native_auto_language
+    language=native_auto_language(info)
     if not language:raise ValueError('No original automatic caption track available.')
     if not re.fullmatch(r'[A-Za-z0-9_-]+',language):raise ValueError('Unsupported caption language identifier.')
     raw=root/f'youtube-captions.{language}.json3'

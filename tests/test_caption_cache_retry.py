@@ -47,6 +47,28 @@ def test_retry_after_seconds_date_and_invalid():
     assert classify_caption_failure('HTTP Error 429\nRetry-After: 71')['retry_after']=='71'
 
 
+def test_uploaded_shared_cache_rejects_wrong_audio_language(tmp_path,monkeypatch):
+    import hashlib
+    from reel_engine.youtube_transcript import atomic_json
+    cache=tmp_path/'cache';folder=cache/'abcdefghijk';folder.mkdir(parents=True)
+    raw=json.dumps(fixture()).encode();(folder/'uploaded.json3').write_bytes(raw)
+    atomic_json(folder/'record.json',{'caption_kind':'uploaded','format':'json3','video_id':'abcdefghijk',
+        'source_duration':60.,'language':'ar','sha256':hashlib.sha256(raw).hexdigest()})
+    calls=[];monkeypatch.setattr(captions.youtube,'ytdlp',downloader(calls))
+    result=captions.fetch_uploaded_captions('abcdefghijk',tmp_path/'job',60,info(),cache_dir=cache)
+    assert result['language']=='en' and not result['caption_cached'] and len(calls)==1
+
+
+def test_wrong_language_run_receipt_does_not_refetch(tmp_path,monkeypatch):
+    from reel_engine.youtube_transcript import atomic_json
+    atomic_json(tmp_path/'caption-request.json',{'video_id':'abcdefghijk'})
+    atomic_json(tmp_path/'uploaded-transcript.json',{'language':'ar'})
+    monkeypatch.setattr(captions.youtube,'ytdlp',lambda *a,**k:pytest.fail('No second fetch'))
+    with pytest.raises(CaptionFetchError) as exc:
+        captions.fetch_uploaded_captions('abcdefghijk',tmp_path,60,info(),cache_dir=tmp_path/'cache')
+    assert 'contradicts' in exc.value.diagnostic['yt_dlp_message']
+
+
 def test_header_exceeding_cap_stops_without_shortening_wait(tmp_path,monkeypatch):
     calls=[];waits=[]
     def fail(*args,**kwargs):calls.append(True);raise RuntimeError('HTTP Error 429\nRetry-After: 601')

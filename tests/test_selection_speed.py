@@ -9,6 +9,9 @@ from reel_engine.config import settings
 def test_native_auto_avoids_translated_tracks():
     assert selection_draft.native_auto_language({'language':'en-US','automatic_captions':{'en-orig':[],'hi':[]}})=='en-orig'
     assert selection_draft.native_auto_language({'language':'en','automatic_captions':{'en':[{'url':'https://example/?tlang=en'}]}}) is None
+    assert selection_draft.native_auto_language({'language':'en-US','automatic_captions':{'ar-orig':[]}}) is None
+    assert selection_draft.native_auto_language({'automatic_captions':{'ar-orig':[],'en-orig':[]}}) is None
+    assert selection_draft.native_auto_language({'language':'en-US','automatic_captions':{'en-US-orig':[]}})=='en-US-orig'
 
 
 def test_auto_is_selection_only_hash_cached_and_fresh_bypasses(tmp_path,monkeypatch):

@@ -2,17 +2,23 @@
 import hashlib,json,time
 from pathlib import Path
 from .config import settings
-from .youtube_transcript import atomic_json,parse_json3
+from .youtube_transcript import atomic_json,parse_json3,caption_matches_audio
 from . import youtube
 
 
 def native_auto_language(info):
-    native=(info.get('language') or '').split('-')[0]
+    native=(info.get('language') or '').replace('_','-').lower()
     tracks=info.get('automatic_captions',{})
     # Never silently pick a translated/dubbed language in a multilingual video.
-    key=native+'-orig'
-    if native and key in tracks:return key
-    if native in tracks and any('tlang=' not in t.get('url','') for t in tracks[native]):return native
+    originals=[key for key,rows in tracks.items() if key.endswith('-orig')
+               and not any('tlang=' in row.get('url','') for row in rows)]
+    if not native:return originals[0] if len(originals)==1 else None
+    exact=[key for key in originals if key[:-5].lower()==native]
+    if len(exact)==1:return exact[0]
+    matching=[key for key in originals if key.split('-')[0].lower()==native.split('-')[0]]
+    if len(matching)==1:return matching[0]
+    for key in (native,native.split('-')[0]):
+        if key in tracks and any('tlang=' not in t.get('url','') for t in tracks[key]):return key
     return None
 
 
@@ -31,7 +37,10 @@ def fetch_selection_captions(ident,root,duration,info,**kwargs):
     if receipt.exists():
         saved=json.loads(receipt.read_text(encoding='utf-8'))
         if saved.get('failure'):raise ValueError(saved['failure'])
-        return json.loads(draft.read_text(encoding='utf-8'))
+        data=json.loads(draft.read_text(encoding='utf-8'))
+        if not caption_matches_audio(data.get('language'),info):
+            raise ValueError('Saved selection caption language contradicts original audio metadata; use local ASR without refetching.')
+        return data
     if not kwargs.get('fresh_captions') and record.exists() and payload.exists():
         meta=json.loads(record.read_text(encoding='utf-8'));raw=payload.read_bytes()
         if meta.get('video_id')==ident and meta.get('language')==language and meta.get('duration')==duration and meta.get('sha256')==hashlib.sha256(raw).hexdigest():

@@ -58,6 +58,20 @@ def test_fetch_uses_original_not_translated_track(monkeypatch,tmp_path):
     assert len(calls)==2
 
 
+def test_native_track_mismatch_falls_back_instead_of_selecting_first_language(monkeypatch,tmp_path):
+    info={'language':'en-US','automatic_captions':{'ar-orig':[],'hi-orig':[]}}
+    monkeypatch.setattr(yt.youtube,'ytdlp',lambda *a,**k:pytest.fail('No wrong-language fetch'))
+    with pytest.raises(ValueError,match='original automatic caption'):
+        yt.fetch_caption_draft('testvideo01',tmp_path,60,info)
+
+
+def test_wrong_language_cached_draft_is_not_reused(monkeypatch,tmp_path):
+    yt.atomic_json(tmp_path/'youtube-transcript.json',{'video_id':'testvideo01','language':'ar','text':'wrong'})
+    monkeypatch.setattr(yt.youtube,'ytdlp',lambda *a,**k:pytest.fail('No wrong-language fetch'))
+    with pytest.raises(ValueError,match='original automatic caption'):
+        yt.fetch_caption_draft('testvideo01',tmp_path,60,{'language':'en-US','automatic_captions':{'ar-orig':[]}})
+
+
 def test_full_local_override_preserves_draft(monkeypatch,tmp_path):
     from reel_engine import local_transcription as local
     yt.atomic_json(tmp_path/'transcript.json',{'provider':'youtube-captions','text':'Draft'})
