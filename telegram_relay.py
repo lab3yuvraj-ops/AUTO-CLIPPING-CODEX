@@ -124,8 +124,10 @@ class Relay:
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('command',choices=['doctor','run']);args=parser.parse_args()
-    trust=Path(os.sys.executable).parent/'ca.pem'
-    if trust.is_file():os.environ.setdefault('SSL_CERT_FILE',str(trust))
+    interpreter_dir=Path(os.sys.executable).parent
+    for trust in (interpreter_dir/'ca.pem',interpreter_dir.parent/'ca.pem'):
+        if trust.is_file():
+            os.environ.setdefault('SSL_CERT_FILE',str(trust));break
     try:
         cfg=Config.load(ROOT);values={**dotenv_values(ROOT/'.env'),**os.environ}
         users=allowed_users(values,cfg.owner)
