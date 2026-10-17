@@ -1,4 +1,4 @@
-"""Owner-only Telegram text input for ONE existing Codex session; no editor."""
+"""Allowlisted private Telegram text input for ONE existing Codex session; no editor."""
 import argparse
 import json
 import os
@@ -17,6 +17,18 @@ from telegram_bot import singleton
 ROOT=Path(__file__).resolve().parent
 
 class RelayError(Exception):pass
+
+def allowed_users(values, owner=0):
+    raw=values.get('TELEGRAM_ALLOWED_USER_IDS')
+    if raw is None or not str(raw).strip():
+        return (owner,) if isinstance(owner,int) and not isinstance(owner,bool) and owner>0 else ()
+    parts=str(raw).split(',')
+    if len(parts)>20 or any(not re.fullmatch(r'[1-9][0-9]{0,18}',x.strip()) for x in parts):
+        raise RelayError('Configure a comma-separated private numeric user allowlist.')
+    ids=tuple(sorted(set(int(x.strip()) for x in parts)))
+    if any(x>=2**63 for x in ids):raise RelayError('Invalid Telegram numeric user ID.')
+    return ids
+
 
 class Session:
     def __init__(self, executable, thread):
@@ -81,29 +93,34 @@ class Session:
         if r.returncode:raise RelayError('Codex did not confirm queue delivery. Check the chat before resending; no automatic retry.')
 
 class Relay:
-    def __init__(self,cfg,session,api):
+    def __init__(self,cfg,session,api,users=None):
+        self.users=allowed_users({},cfg.owner) if users is None else allowed_users({'TELEGRAM_ALLOWED_USER_IDS':','.join(str(x) for x in users)})
+        if not self.users:raise RelayError('Configure at least one private allowed user.')
         self.cfg=cfg;self.session=session;self.api=api;self.path=cfg.state/'relay.json'
-        self.data=json.loads(self.path.read_text()) if self.path.exists() else {'owner':cfg.owner,'thread':session.thread,'offset':0,'initialized':False}
-        if self.data['owner']!=cfg.owner or self.data['thread']!=session.thread:raise RelayError('Relay state belongs to a different owner/session. Reconcile locally.')
+        self.data=json.loads(self.path.read_text()) if self.path.exists() else {'allowed_users':list(self.users),'thread':session.thread,'offset':0,'initialized':False}
+        saved=self.data.get('allowed_users',[self.data.get('owner')])
+        if saved!=list(self.users) or self.data['thread']!=session.thread:raise RelayError('Relay state belongs to a different allowlist/session. Reconcile locally.')
     def save(self):atomic_json(self.path,self.data)
     def handle(self,u):
         ident=u.get('update_id')
         if not isinstance(ident,int) or ident<self.data['offset']:return
         self.data['offset']=ident+1;self.save()
         m=u.get('message',{});chat=m.get('chat',{});sender=m.get('from',{})
-        if sender.get('id')!=self.cfg.owner or sender.get('is_bot') or chat.get('id')!=self.cfg.owner or chat.get('type')!='private':return
+        sender_id=sender.get('id')
+        if (not isinstance(sender_id,int) or isinstance(sender_id,bool) or sender_id not in self.users
+            or sender.get('is_bot') or chat.get('id')!=sender_id or chat.get('type')!='private'):return
         text=m.get('text')
         if not isinstance(text,str) or not text.strip():
-            self.api.text(self.cfg.owner,'This relay supports text only. Attach files directly in Codex.');return
+            self.api.text(sender_id,'This relay supports text only. Attach files directly in Codex.');return
         if text=='/start':
-            self.api.text(self.cfg.owner,'Private text relay to your fixed Codex session. Messages are queued verbatim. Replies and approvals remain in Codex for this first version.');return
-        self.data['last_delivery']='attempting';self.save()
+            self.api.text(sender_id,'Private text relay to the shared fixed Codex session. Messages are queued verbatim. Replies and approvals remain in Codex for this first version.');return
+        self.data['last_delivery']='attempting';self.data['last_sender']=sender_id;self.save()
         try:self.session.send(text)
         except RelayError:
             self.data['last_delivery']='unconfirmed';self.save()
-            self.api.text(self.cfg.owner,'Message delivery was not confirmed. Check Codex before resending. No separate session or clipping job was started by this relay.');return
+            self.api.text(sender_id,'Message delivery was not confirmed. Check Codex before resending. No separate session or clipping job was started by this relay.');return
         self.data['last_delivery']='queued';self.save()
-        self.api.text(self.cfg.owner,'Queued to your existing Codex session. Read the reply in Codex.')
+        self.api.text(sender_id,'Queued to your existing Codex session. Read the reply in Codex.')
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('command',choices=['doctor','run']);args=parser.parse_args()
@@ -111,13 +128,14 @@ def main():
     if trust.is_file():os.environ.setdefault('SSL_CERT_FILE',str(trust))
     try:
         cfg=Config.load(ROOT);values={**dotenv_values(ROOT/'.env'),**os.environ}
+        users=allowed_users(values,cfg.owner)
         session=Session(cfg.codex,values.get('TELEGRAM_CODEX_THREAD_ID',''));session.check()
         if args.command=='doctor':
-            print(json.dumps({'existing_session_reachable':True,'telegram_configured':bool(cfg.token and cfg.owner),'message_sent':False,'generation_started':False}));return
-        cfg.require_private_owner()
+            print(json.dumps({'existing_session_reachable':True,'telegram_configured':bool(cfg.token and users),'allowed_user_count':len(users),'message_sent':False,'generation_started':False}));return
+        if not cfg.token or not users:raise RelayError('Configure the bot token and private allowed users first.')
         # Reuse the old lock to prevent running both Telegram transports.
         with singleton(cfg.state/'bot.lock'):
-            api=API(cfg.token);relay=Relay(cfg,session,api)
+            api=API(cfg.token);relay=Relay(cfg,session,api,users)
             if not relay.data['initialized']:
                 old=api.updates(-1,0);relay.data['offset']=max([u['update_id']+1 for u in old]+[relay.data['offset']]);relay.data['initialized']=True;relay.save()
             while True:

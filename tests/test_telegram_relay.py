@@ -66,3 +66,26 @@ def test_readonly_check_uses_exact_thread_without_resume_or_generation(monkeypat
     sent=[json.loads(x) for x in p.stdin.getvalue().splitlines()]
     assert [x['method'] for x in sent]==['initialize','initialized','thread/read']
     assert sent[-1]['params']['threadId']==TID
+
+def test_all_allowlisted_users_forward_verbatim_without_cross_chat_notifications(tmp_path):
+    class DestAPI(API):
+        def __init__(self):super().__init__();self.recipients=[]
+        def text(self,owner,text):self.recipients.append(owner);super().text(owner,text)
+    users=(42,43,44,45);session=Session();api=DestAPI();relay=mod.Relay(Config(tmp_path),session,api,users)
+    for i,owner in enumerate(users,1):relay.handle(update(i,'hello '+str(owner),owner))
+    assert session.sent==['hello '+str(x) for x in users]
+    assert api.recipients==list(users)
+    relay.handle(update(5,'not allowed',99));assert len(session.sent)==4
+    u=update(6,'group',42);u['message']['chat']['type']='group';relay.handle(u)
+    u=update(7,'spoof',42);u['message']['chat']['id']=43;relay.handle(u)
+    assert len(session.sent)==4
+    assert mod.Relay(Config(tmp_path),session,api,users).data['offset']==8
+    with pytest.raises(mod.RelayError):mod.Relay(Config(tmp_path),session,api,(42,43))
+
+
+def test_allowlist_parsing_is_explicit_bounded_and_defaults_to_single_owner():
+    assert mod.allowed_users({},42)==(42,)
+    assert mod.allowed_users({'TELEGRAM_ALLOWED_USER_IDS':'43, 42,43'},99)==(42,43)
+    assert mod.allowed_users({},0)==()
+    for raw in ('42,','0','-4','true','42; command',str(2**63),','.join(str(x) for x in range(1,22))):
+        with pytest.raises(mod.RelayError):mod.allowed_users({'TELEGRAM_ALLOWED_USER_IDS':raw})
