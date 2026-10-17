@@ -260,3 +260,23 @@ def test_cli_command_uses_real_exec_schema_stdin_and_workspace_sandbox(tmp_path,
 def test_controller_state_cannot_cross_owners(tmp_path):
     cfg=config(tmp_path);atomic_json(cfg.state/'controller.json',{'owner':999,'offset':10,'request':None})
     with pytest.raises(WorkflowError,match='another Telegram owner'):Controller(cfg,FakeAPI(),FakeRunner())
+
+
+def test_code_mode_audit_requires_real_image_event_in_exact_session(tmp_path,monkeypatch):
+    from telegram_bridge.runner import session_tool_evidence
+    home=tmp_path/'private-codex';monkeypatch.setenv('CODEX_HOME',str(home))
+    tid='12345678-1234-1234-1234-123456789abc';image=tmp_path/'fixture.png'
+    rows=[{'type':'session_meta','payload':{'id':tid,'cwd':str(tmp_path)}},
+        {'type':'event_msg','payload':{'type':'item_completed','item':{'type':'CommandExecution','exit_code':0}}},
+        {'type':'event_msg','payload':{'type':'item_completed','item':{'type':'AgentMessage','content':'I viewed the image'}}}]
+    path=home/'sessions'/('rollout-'+tid+'.jsonl');path.parent.mkdir(parents=True)
+    path.write_text('\n'.join(json.dumps(x) for x in rows))
+    assert not session_tool_evidence(config(tmp_path),tid,image)['image_review_observed']
+    rows.append({'type':'event_msg','payload':{'type':'item_completed','item':{'type':'ImageView','path':str(image)}}})
+    path.write_text('\n'.join(json.dumps(x) for x in rows))
+    assert all(session_tool_evidence(config(tmp_path),tid,image).values())
+    rows[-1]['payload']['item']['path']=image.as_uri();path.write_text('\n'.join(json.dumps(x) for x in rows))
+    assert all(session_tool_evidence(config(tmp_path),tid,image).values())
+    assert not session_tool_evidence(config(tmp_path),tid,tmp_path/'other.png')['image_review_observed']
+    rows[0]['payload']['cwd']=str(tmp_path/'wrong-project');path.write_text('\n'.join(json.dumps(x) for x in rows))
+    assert not any(session_tool_evidence(config(tmp_path),tid,image).values())

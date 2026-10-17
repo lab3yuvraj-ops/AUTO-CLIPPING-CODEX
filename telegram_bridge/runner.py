@@ -10,6 +10,7 @@ import threading
 import time
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
+from urllib.request import url2pathname
 from .storage import atomic_json
 
 
@@ -80,6 +81,39 @@ def require_probe(config):
         raise WorkflowError('Tool capability proof is missing or stale. Run the explicitly authorized probe again.')
 
 
+def session_tool_evidence(config, thread_id, required_image=None):
+    """Read only this invocation's own CLI audit, never auth or other sessions.
+
+    Current code-mode CLI omits ImageView from exec JSONL while retaining the
+    actual tool event in its local session audit. Agent prose is not evidence.
+    """
+    empty={'shell_observed':False,'image_review_observed':False}
+    if not re.fullmatch(r'[0-9a-f-]{36}',thread_id or ''):return empty
+    home=Path(os.environ.get('CODEX_HOME',str(Path.home()/'.codex')))
+    matches=list((home/'sessions').rglob('*'+thread_id+'*.jsonl'))
+    if len(matches)!=1:return empty
+    session_ok=False;shell=False;image=False
+    try:
+        with matches[0].open(encoding='utf-8') as stream:
+            for line in stream:
+                d=json.loads(line);payload=d.get('payload',{})
+                if d.get('type')=='session_meta':
+                    session_ok=(payload.get('id')==thread_id and Path(payload.get('cwd','')).resolve()==config.root.resolve())
+                if d.get('type')!='event_msg' or payload.get('type')!='item_completed':continue
+                item=payload.get('item',{});kind=item.get('type')
+                if kind=='CommandExecution' and item.get('exit_code')==0:shell=True
+                if kind=='ImageView' and item.get('path'):
+                    raw=item['path'];uri=urlsplit(raw)
+                    if uri.scheme=='file':
+                        if uri.netloc not in ('','localhost'):continue
+                        raw=url2pathname(uri.path)
+                    viewed=Path(raw).resolve()
+                    if required_image is not None:image=image or viewed==Path(required_image).resolve()
+                    else:image=image or viewed.is_relative_to((config.root/'workflow/jobs').resolve())
+        return {'shell_observed':session_ok and shell,'image_review_observed':session_ok and image}
+    except (OSError,ValueError,TypeError):return empty
+
+
 def stop_tree(process):
     if process.poll() is not None:return
     if os.name=='nt':
@@ -89,7 +123,7 @@ def stop_tree(process):
     except subprocess.TimeoutExpired:raise WorkflowError('Worker termination unconfirmed; do not launch another job.') from None
 
 
-def run_codex(config, folder, prompt, schema, progress=lambda _:None, started=lambda _:None):
+def run_codex(config, folder, prompt, schema, progress=lambda _:None, started=lambda _:None, required_image=None):
     folder.mkdir(parents=True,exist_ok=True)
     schema_path=folder/'response.schema.json'; atomic_json(schema_path,schema)
     output=folder/'response.json'
@@ -107,7 +141,7 @@ def run_codex(config, folder, prompt, schema, progress=lambda _:None, started=la
         events.put(None)
     thread=threading.Thread(target=reader,daemon=True);thread.start()
     process.stdin.write(prompt);process.stdin.close()
-    end=time.monotonic()+config.timeout; usage={}; image=False;shell=False;failed=False
+    end=time.monotonic()+config.timeout; usage={}; image=False;shell=False;failed=False;thread_id=None
     try:
         while True:
             if time.monotonic()>end:raise WorkflowError('Codex workflow timed out. Artifacts retained; no automatic rerun.')
@@ -117,6 +151,7 @@ def run_codex(config, folder, prompt, schema, progress=lambda _:None, started=la
             try:event=json.loads(line)
             except ValueError:continue
             kind=event.get('type');item=event.get('item',{});typ=item.get('type','')
+            if kind=='thread.started':thread_id=event.get('thread_id')
             if typ=='command_execution':shell=True
             if typ in ('image_view','image_viewing','view_image'):image=True
             # Code-mode tools may nest view_image in a tool call. Exact tool
@@ -126,8 +161,11 @@ def run_codex(config, folder, prompt, schema, progress=lambda _:None, started=la
             if kind in ('turn.failed','error'):failed=True
             if kind in ('thread.started','turn.started'):progress('Codex session started.')
         process.wait(timeout=10)
+        audit=session_tool_evidence(config,thread_id,required_image)
+        image=image or audit['image_review_observed'];shell=shell or audit['shell_observed']
         atomic_json(folder/'execution.json',{'returncode':process.returncode,'shell_observed':shell,
             'image_review_observed':image,'usage':usage,'finished':time.time(),
+            'thread_id':thread_id,'local_tool_audit_used':bool(audit['image_review_observed']),
             'note':'Raw Codex commands/messages/stderr intentionally not stored or forwarded.'})
         if process.returncode or failed or not output.is_file():
             raise WorkflowError('Codex did not complete successfully. No video was accepted; inspect the local workflow.')

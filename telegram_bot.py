@@ -47,6 +47,15 @@ def doctor(config):
     return result
 
 
+def record_probe(config, folder, result, evidence):
+    if (result.get('status')!='verified' or 'green' not in result.get('color','').lower()
+        or not all(evidence.values()) or not (folder/'shell-proof.txt').is_file()
+        or (folder/'shell-proof.txt').read_text().strip()!='PROBE_OK'):
+        raise WorkflowError('Headless image/shell capability not proved. Desktop tools are not assumed equivalent; do not start real jobs.')
+    atomic_json(config.state/'capability.json',{'binding':fingerprint(config),**evidence,'verified':time.time()})
+    return {'capability_probe_passed':True,'clipping_job_started':False,'note':'Real source editorial quality is still untested; existing review safeguards remain.'}
+
+
 def probe(config):
     """Explicitly authorized model request; NOT run by doctor or unit tests."""
     binding=fingerprint(config)
@@ -60,18 +69,18 @@ publishing, or read .env/auth files. Use an actual shell tool to read templates/
 and write the exact text PROBE_OK to {folder/'shell-proof.txt'}. Use the actual image-view tool to
 open {folder/'fixture.png'} and report its dominant color. Do not infer from file names or a shell pixel
 query. If shell or image tools are unavailable report unavailable. No code/config changes. Return schema.'''
-    result,evidence=run_codex(config,folder,prompt,schema)
-    if (result.get('status')!='verified' or 'green' not in result.get('color','').lower()
-        or not all(evidence.values()) or not (folder/'shell-proof.txt').is_file()
-        or (folder/'shell-proof.txt').read_text().strip()!='PROBE_OK'):
-        raise WorkflowError('Headless image/shell capability not proved. Desktop tools are not assumed equivalent; do not start real jobs.')
-    atomic_json(config.state/'capability.json',{'binding':binding,**evidence,'verified':time.time()})
-    return {'capability_probe_passed':True,'clipping_job_started':False,'note':'Real source editorial quality is still untested; existing review safeguards remain.'}
+    result,evidence=run_codex(config,folder,prompt,schema,required_image=folder/'fixture.png')
+    if fingerprint(config)!=binding:raise WorkflowError('Setup changed during the probe; proof refused.')
+    return record_probe(config,folder,result,evidence)
 
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('command',choices=['doctor','probe','run','identify'])
     p.add_argument('--authorize-codex-probe',action='store_true');args=p.parse_args()
+    # Reuse the active environment's existing private CA bundle when one was
+    # installed for this Windows machine. Never turn TLS verification off.
+    trust=Path(sys.executable).parent/'ca.pem'
+    if trust.is_file():os.environ.setdefault('SSL_CERT_FILE',str(trust))
     config=Config.load(ROOT)
     try:
         if args.command=='doctor':print(json.dumps(doctor(config),indent=2));return

@@ -1,4 +1,4 @@
-param([switch]$Remove)
+param([switch]$Remove,[string]$Python='')
 $ErrorActionPreference = 'Stop'
 $telegramRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $telegramTaskName = 'AutoClippingTelegram-' + (([System.Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($telegramRoot)) | ForEach-Object { $_.ToString('x2') }) -join '').Substring(0,12)
@@ -7,7 +7,7 @@ if ($Remove) {
     Write-Output 'Removed this checkout Telegram logon task.'
     exit
 }
-$telegramPython = Join-Path $telegramRoot '.venv/Scripts/pythonw.exe'
+$telegramPython = if ($Python) { (Resolve-Path -LiteralPath $Python).Path } else { Join-Path $telegramRoot '.venv/Scripts/pythonw.exe' }
 if (-not (Test-Path -LiteralPath $telegramPython)) { throw 'Install this checkout .venv first. No task registered.' }
 $telegramAction = New-ScheduledTaskAction -Execute $telegramPython -Argument ('"' + (Join-Path $telegramRoot 'telegram_bot.py') + '" run') -WorkingDirectory $telegramRoot
 $telegramUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
