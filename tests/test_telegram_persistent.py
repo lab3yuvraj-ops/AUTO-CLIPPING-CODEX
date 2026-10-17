@@ -74,3 +74,35 @@ def test_no_video_for_failed_checks_or_outside_job(tmp_path):
     record={'video':str(video.resolve()),'status':'Needs approval','render_sha256':hashlib.sha256(video.read_bytes()).hexdigest(),'checks':[{'status':'fail'}]}
     (folder/'job.json').write_text(json.dumps(record));c.reply=str(video.resolve());c.deliver_video(42)
     assert not api.videos
+
+
+def test_progress_is_private_redacted_deduplicated_and_not_final(tmp_path):
+    c,api=controller(tmp_path);c.secrets=('private-fixture-value',)
+    c.data['active']={'owner':43,'turn':'turn-progress'}
+    progress={'method':'item/completed','params':{'threadId':c.data['thread'],
+        'item':{'id':'progress-1','type':'agentMessage','phase':'commentary',
+                'text':'Repairing private-fixture-value; resuming saved stage.'}}}
+    c.event(progress);c.event(progress)
+    c.event({'method':'item/completed','params':{'threadId':'another-thread',
+        'item':{'type':'agentMessage','phase':'commentary','text':'unrelated'}}})
+    assert api.messages==[(43,'Repairing [redacted]; resuming saved stage.')]
+    assert c.reply=='' and c.data['active']
+
+
+def test_conversation_allows_tested_local_recovery_without_relaxing_guards(tmp_path):
+    c,_=controller(tmp_path);instructions=c.thread_params()['developerInstructions']
+    assert 'minimal reversible source/configuration/runtime repair' in instructions
+    assert 'resume' in instructions and 'do not defer them to the desktop chat' in instructions
+    assert 'bounded recovery' in instructions and 'never accept translated/dubbed tracks' in instructions
+    assert 'Never publish' in instructions and 'Never modify main' in instructions
+    assert 'change source code/configuration, install services' not in instructions
+
+
+def test_permission_requests_still_require_human_action(tmp_path):
+    c,api=controller(tmp_path);sent=[]
+    class WS:
+        def send(self,text):sent.append(json.loads(text))
+    c.ws=WS();c.data['active']={'owner':42,'turn':'turn-1'}
+    c.event({'id':99,'method':'item/commandExecution/requestApproval','params':{'threadId':c.data['thread']}})
+    assert sent[0]['error']['code']==-32601
+    assert 'No permission was granted automatically' in api.messages[0][1]

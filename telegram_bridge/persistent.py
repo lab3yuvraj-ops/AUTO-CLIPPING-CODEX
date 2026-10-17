@@ -10,15 +10,30 @@ import uuid
 from pathlib import Path
 from .storage import atomic_json
 
-INSTRUCTIONS='''Telegram is the human input/output interface for this persistent Codex conversation.
+INSTRUCTIONS='''Telegram is only the human input/output interface for this persistent Codex conversation,
+not a separate clipping automation or a restricted URL-command controller. Incoming text is the
+human's instruction; keep context and use the normal Codex shell, file, image and testing tools.
 Work only in this project on performance-optimization and follow AGENTS.md's latest rules.
-Use the existing reel.py/reel_engine workflow unchanged. Do not replace it, start a dashboard,
-change source code/configuration, install services or use paid AI APIs for a clipping request.
+Use the existing reel.py/reel_engine editor and preserve its creative style and safeguards.
+When a recoverable local problem occurs, inspect the exact error and saved artifacts, diagnose
+the cause, make a minimal reversible source/configuration/runtime repair, test it, and resume
+the requested work from the saved successful stage within this same turn. Such repairs are
+authorized as part of completing the request; do not defer them to the desktop chat merely
+because the message came from Telegram. Inspect Git changes and preserve unrelated user work.
+Never modify main, force-push, replace the editor, start a dashboard or introduce paid AI APIs.
+Use bounded recovery, not infinite retries, and never redo successful expensive stages needlessly.
+An incorrect caption language requires diagnosing native-track selection or using the existing
+local original-audio ASR fallback; never accept translated/dubbed tracks to force progress.
 A YouTube URL requests clips: ask the clip count in a normal text reply unless already supplied.
 When clarification is needed, ask it as plain text and finish your turn; the next Telegram message
 will be the human's answer. Do not use interactive question tools requiring a desktop client.
 Use actual local media and inspection tools; never claim tool access or review without evidence.
-If tools cannot do a necessary step, explain and stop. Mark real interactive phases and timings.
+Give concise progress updates while working, including the problem, repair and resumed stage.
+Only stop for a genuine external blocker, missing human-only consent/credentials, unavailable
+tool capability, unresolved required editorial evidence, or exhausted bounded recovery. Ask in
+Telegram for decisions that can be answered there. Explain exactly what remains when local
+physical/browser interaction is actually necessary. Never invent an automatic fix or approval.
+Mark real interactive phases and timings.
 Never publish, create publication approval, or write to Instagram in this preview-only transport.
 Show final local MP4 paths normally after technical checks; preserve caption/style/CTA/review rules.
 Never print secrets, read authentication/password stores, or include private tool output in replies.
@@ -43,7 +58,7 @@ class Conversation:
             self.data['interrupted']=True;self.data['ready']=False;self.save()
             raise ValueError('Prior turn was interrupted. Reconcile before accepting more instructions.')
         self.inbox=queue.Queue();self.ready=threading.Event();self.failed=threading.Event()
-        self.ws=None;self.rpc_id=10;self.reply='';self.stop=threading.Event()
+        self.ws=None;self.rpc_id=10;self.reply='';self.progress_seen=set();self.stop=threading.Event()
     def save(self):atomic_json(self.path,self.data)
     def say(self,owner,text):
         text=safe_text(text,self.secrets)
@@ -100,7 +115,7 @@ class Conversation:
     def launch_next(self):
         with self.lock:
             if self.data.get('active') or not self.data['queue']:return
-            item=self.data['queue'].pop(0);self.data['active']=item;self.reply='';self.save()
+            item=self.data['queue'].pop(0);self.data['active']=item;self.reply='';self.progress_seen.clear();self.save()
         params=self.thread_params();params['threadId']=self.data['thread']
         self.rpc('thread/resume',params) # Refresh local setup without rewriting the incoming text.
         result=self.rpc('turn/start',{'threadId':self.data['thread'],'clientUserMessageId':item['id'],
@@ -144,7 +159,12 @@ class Conversation:
         if method=='item/completed':
             item=params.get('item',{})
             if item.get('type')=='agentMessage' and item.get('text'):
-                if item.get('phase') not in ('commentary',):self.reply=item['text']
+                if item.get('phase')=='commentary':
+                    # Completed assistant progress only; never stream raw commands or tool output.
+                    key=(active.get('turn'),item.get('id') or hashlib.sha256(item['text'].encode()).hexdigest())
+                    if key not in self.progress_seen:
+                        self.progress_seen.add(key);self.say(active['owner'],item['text'])
+                else:self.reply=item['text']
         if method=='turn/completed':
             turn=params.get('turn',{});status=turn.get('status')
             if active.get('turn') and turn.get('id')!=active['turn']:return

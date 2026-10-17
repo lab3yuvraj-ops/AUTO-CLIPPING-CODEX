@@ -1,5 +1,11 @@
 # Telegram and Codex conversation transport
 
+## Normal Codex recovery (18 October 2026; latest)
+
+Persistent mode is a conversational interface, not a separate workflow runner. The former instruction forbidding source/configuration changes during clipping has been removed. Codex may inspect errors, make minimal reversible local repairs, run tests and resume the saved successful stage in the same turn on performance-optimization. It must not defer routine debugging to the desktop just because the request arrived through Telegram. Existing editor, captions, review, native-audio rules, credentials and publication restrictions remain intact. Genuine human-only consent, missing credentials, unavailable capabilities and unresolved required editorial evidence still stop work; network recovery remains bounded. Recovery is an agent capability, not a guarantee every failure can be repaired automatically.
+
+Completed assistant commentary now returns to the initiating Telegram user as progress, once per message, with the same secret redaction as final replies. Raw shell/tool output is never forwarded. Text remains verbatim and uses the same saved dedicated conversation. This does not expose the exact desktop chat or automatically install its browser/plugins. Restart the idle owned server and relay after changing developer instructions so a loaded session cannot retain the old restrictions; preserve the thread receipt/history and never interrupt an active turn for a configuration update.
+
 **Current operational mode:** the owner-approved persistent conversation (see the last section) is connected and its message/reply test passed. The exact existing desktop-chat mode remains unavailable. Do not confuse these modes.
 
 This optional relay forwards private owner text verbatim with the installed official `codex queue --thread UUID --message TEXT`. It never launches `codex exec`, creates a thread, assembles an editorial prompt, picks a model, changes permissions or changes the clipping engine. Use a fixed UUID, never the most recent session or a guessed chat name. The existing conversation determines what the message means and asks for clip count/approval normally.

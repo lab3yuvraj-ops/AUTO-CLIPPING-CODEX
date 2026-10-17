@@ -44,6 +44,9 @@ and ask the owner to enter them privately in this local project's .env/Codex edi
 Use existing configured credentials and cached models; never repeat account setup or installation
 when diagnostics pass. Missing Instagram/Zernio credentials do not block clipping a supplied URL.
 A saved channel is required only for a channel trigger. Do not invent a missing-credential claim from
-an unrelated Python interpreter. General onboarding/provisioning is done locally in Codex; do not
-start duplicate installations or browser credential setup from a Telegram clipping conversation.
+an unrelated Python interpreter. This is a Codex conversation: diagnose and repair genuine local
+runtime/package/configuration faults here using the existing setup instructions and tests, then
+resume. Do not demand desktop onboarding merely because Telegram delivered the request. Avoid
+duplicate installations; never reinstall a working environment. Human-only login, credential entry
+and provider consent still require the owner through the private local setup flow.
 ''',secrets)
