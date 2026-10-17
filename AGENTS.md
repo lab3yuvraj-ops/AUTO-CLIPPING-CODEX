@@ -1,3 +1,7 @@
+## Existing private setup in Telegram (2026-10-18)
+
+The persistent Telegram conversation must inspect this checkout's .env/runtime readiness before asking for setup. Reuse present credentials and models through existing project commands; never print secret values or ask for keys/passwords/tokens in Telegram. Report only genuinely missing names and direct the owner to this local private .env/Codex editor. A supplied URL needs neither a saved channel nor Instagram credentials. Use .venv/Scripts/python.exe or the explicitly verified TELEGRAM_PYTHON_PATH, not an unrelated PATH Python. Do not run duplicate onboarding/provisioning when local diagnostics pass. Never search parent folders or copy creator/other-student credentials into new clones. Existing editorial and exact-preview publication safeguards remain unchanged.
+
 ## Transcript first and one visual pass (2026-10-16; latest user decision)
 
 This supersedes the older full-video preparation, whole-source overview, repeated visual review/correction and mandatory final screenshot inspection rules below for NEW transcript-first jobs. Work only on performance-optimization. Do not publish without approval of the exact MP4.

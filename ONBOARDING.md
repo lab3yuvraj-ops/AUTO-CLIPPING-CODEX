@@ -4,6 +4,12 @@ Open your own clone as a project in Codex and say **onboarding**. Each student h
 
 Codex should perform the setup, not just display instructions: inspect the existing installation, open Chrome with supported browser/computer-use tools, guide your own account access, install missing dependencies and prepare models. Follow [browser-assisted onboarding](docs/BROWSER-ONBOARDING.md). Routine clicks can be handled by Codex. You may still need to sign in, complete 2FA/CAPTCHA, personally accept model-access terms/contact sharing, or approve a service/Windows permission. A clone cannot bypass those requirements or install browser-control tools automatically. Never send passwords or tokens in chat.
 
+## Reuse existing private setup first
+
+Before requesting credentials or installing anything, inspect THIS checkout's ignored `.env`, local `.venv`/explicit TELEGRAM_PYTHON_PATH, cached models and saved channel. Report presence/readiness only, never values. Existing valid configuration is reused. Do not search parent folders or copy a creator's/another student's keys, connections, approvals or jobs into a clone. Each student enters their own credentials once in the private local editor; not Telegram or public chat.
+
+The persistent Telegram conversation receives a fresh presence/readiness snapshot before each message. It uses the configured project interpreter, not whichever system Python is on PATH. Missing Zernio/Instagram credentials do not block clipping a supplied URL, and a saved channel is required only for channel-based triggers. If setup is incomplete, name only the missing fields/components and finish it locally in Codex. Never ask the student to repeat credentials through Telegram or rerun onboarding just because the wrong interpreter lacks packages.
+
 ## First-time installation (Windows)
 
 Use Python 3.11, Git, FFmpeg/ffprobe and a supported yt-dlp JavaScript runtime such as Node.js. From the repository folder in PowerShell:
@@ -15,7 +21,7 @@ py -3.11 -m venv .venv
 .venv/Scripts/python.exe -m pip install --upgrade pip
 .venv/Scripts/python.exe -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 .venv/Scripts/python.exe -m pip install -r requirements-local.txt
-Copy-Item .env.example .env
+if (-not (Test-Path -LiteralPath .env)) { Copy-Item .env.example .env }
 ```
 
 Do not overwrite an existing `.env`. This workflow currently uses Windows process locking; other platforms need that part adapted before use. CPU/int8 is the supported default; no GPU or paid inference API is required. Model downloads are a one-time setup and depend on your connection and machine.

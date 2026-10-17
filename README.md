@@ -79,3 +79,5 @@ For a stalled selected-section transfer, an explicit bounded recovery is availab
 For an incoming-text relay to one existing Codex session, see [docs/TELEGRAM-RELAY.md](docs/TELEGRAM-RELAY.md). This is a separate, not-yet-connected prototype: same-desktop-chat delivery requires a reachable shared server and a supervised test. It does not change editing automation or mirror replies. Do not start the legacy clipping controller for this use case.
 
 The owner-approved `telegram_relay.py run --persistent` mode now supports a dedicated persistent Codex conversation with Telegram text questions/replies and validated MP4 delivery. It is separate from the open desktop chat and keeps the editor unchanged. Setup, permissions, dependencies and actual validation limits are in docs/TELEGRAM-RELAY.md.
+
+Student setup is detected from that clone’s own private .env and verified local Python environment. The Telegram conversation refreshes this presence/readiness snapshot before each message, reuses cached models/configured accounts and never asks for secret values in Telegram. Missing Instagram credentials do not block URL clipping. See ONBOARDING.md.

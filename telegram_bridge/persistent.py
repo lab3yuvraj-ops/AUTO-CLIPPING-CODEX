@@ -78,11 +78,17 @@ class Conversation:
                 return event.get('result',{})
             self.event(event)
         raise RuntimeError('Codex protocol request timed out.')
+    def thread_params(self):
+        from .local_setup import instructions
+        setup,secrets=instructions(self.cfg.root)
+        self.secrets=tuple(set(self.secrets+secrets))
+        return {'cwd':str(self.cfg.root.resolve()),'approvalPolicy':'never','sandbox':'workspace-write',
+            'modelProvider':'openai','developerInstructions':INSTRUCTIONS+setup}
+
     def setup(self):
         self.rpc('initialize',{'clientInfo':{'name':'telegram_persistent_codex','title':'Telegram Codex Conversation','version':'1.0.0'}})
         self.ws.send(json.dumps({'method':'initialized','params':{}}))
-        params={'cwd':str(self.cfg.root.resolve()),'approvalPolicy':'never','sandbox':'workspace-write',
-            'modelProvider':'openai','developerInstructions':INSTRUCTIONS}
+        params=self.thread_params()
         if self.data.get('thread'):
             params['threadId']=self.data['thread'];thread=self.rpc('thread/resume',params)['thread']
         else:
@@ -95,6 +101,8 @@ class Conversation:
         with self.lock:
             if self.data.get('active') or not self.data['queue']:return
             item=self.data['queue'].pop(0);self.data['active']=item;self.reply='';self.save()
+        params=self.thread_params();params['threadId']=self.data['thread']
+        self.rpc('thread/resume',params) # Refresh local setup without rewriting the incoming text.
         result=self.rpc('turn/start',{'threadId':self.data['thread'],'clientUserMessageId':item['id'],
             'input':[{'type':'text','text':item['text']}],
             'sandboxPolicy':{'type':'workspaceWrite','writableRoots':[str(self.cfg.root.resolve())],'networkAccess':True}})
