@@ -4,7 +4,7 @@ Persistent mode is the supported student interface. Telegram supplies text to on
 
 ## Student setup
 
-1. Clone the performance-optimization branch and open it in Codex. Say onboarding. Follow ONBOARDING.md for the CPU environment, FFmpeg/ffprobe, yt-dlp runtime and local speech models.
+1. Clone the performance-optimization branch and open it in Codex. Say onboarding and answer yes to **Do you want to include Telegram?** Answering no skips Telegram-specific setup while preserving local editor onboarding. Follow ONBOARDING.md for the CPU environment, FFmpeg/ffprobe, yt-dlp runtime and local speech models.
 2. Enter your own TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_USER_IDS privately in this clone's ignored .env. Never copy the creator's credentials, connection receipt, jobs, media, approvals or publication state. Zernio credentials are not required to clip a supplied URL.
 3. Install requirements-telegram.txt in the project environment. Use an official complete Codex CLI with your own ChatGPT login, not API-key authentication. If the desktop-bundled CLI cannot start the shared server, install the official @openai/codex npm package in tools/vendor/codex-relay and configure its actual executable in TELEGRAM_CODEX_PATH. Windows .cmd/.bat/.ps1 wrappers are not accepted as the executable. Onboarding Codex can locate the installed codex.exe; no creator-specific path is distributed.
 4. Start the owned official app-server daemon with REEL_PUBLICATION_DISABLED=true and no AI API-key/provider overrides. This never enables billing. Do not stop another project's active server. Verify the isolated server supports the installed official protocol.

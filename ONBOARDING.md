@@ -4,9 +4,18 @@ Open your own clone as a project in Codex and say **onboarding**. Each student h
 
 Codex should perform the setup, not just display instructions: inspect the existing installation, open Chrome with supported browser/computer-use tools, guide your own account access, install missing dependencies and prepare models. Follow [browser-assisted onboarding](docs/BROWSER-ONBOARDING.md). Routine clicks can be handled by Codex. You may still need to sign in, complete 2FA/CAPTCHA, personally accept model-access terms/contact sharing, or approve a service/Windows permission. A clone cannot bypass those requirements or install browser-control tools automatically. Never send passwords or tokens in chat.
 
+## Choose whether to include Telegram
+
+After **onboarding**, Codex asks once: **Do you want to include Telegram?**
+
+- **Yes:** complete normal local setup plus the Telegram checklist below and its connection checks.
+- **No:** complete normal local setup only. Do not request Telegram credentials, install Telegram-only dependencies/CLI packages, start its daemon/listener or register a logon task. Preserve any existing Telegram configuration.
+
+Wait for the answer before Telegram-specific actions. If the student already explicitly included or excluded Telegram, honor that without asking again. This onboarding question does not add questions to normal Telegram clipping.
+
 ## Telegram student checklist (current)
 
-Cloning downloads project code, fonts, CTA and configuration templates only. It does **not** install Python, FFmpeg, Node, packages, model weights, Codex authentication or private credentials. Open the clone in Codex and say **onboarding, including Telegram**. Codex checks existing setup and performs missing installation using this guide; the student completes required login, model terms, CAPTCHA/2FA or OS consent personally.
+Cloning downloads project code, fonts, CTA and configuration templates only. It does **not** install Python, FFmpeg, Node, packages, model weights, Codex authentication or private credentials. Open the clone in Codex and say **onboarding**, then answer **yes** to the Telegram question. Codex checks existing setup and performs missing installation using this guide; the student completes required login, model terms, CAPTCHA/2FA or OS consent personally.
 
 1. Install/verify Git, Python 3.11, FFmpeg/ffprobe, Node and Codex with the student's own ChatGPT login. Run tools/setup_local.ps1 for CPU packages, and prepare the local speech models. Reuse a working installation.
 2. Create the student's own bot with Telegram @BotFather, and enter TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_USER_IDS (numeric sender IDs) in the clone's private .env. No secrets go into Telegram messages to the clipping bot. Instagram/Zernio is optional for clipping; a channel is optional for a supplied URL.

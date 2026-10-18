@@ -1,5 +1,7 @@
 # Browser-assisted onboarding contract
 
+On **onboarding**, ask once **Do you want to include Telegram?** unless explicitly answered already. Wait before Telegram-specific setup. Yes adds the persistent Telegram checklist; no skips Telegram credentials, optional dependencies/CLI, daemon/listener and startup task while continuing core local setup. Never delete an existing connection on a skip. Personal login, terms and consent remain the student's responsibility.
+
 The trigger is **onboarding** in the student's own clone. This is an instruction for the Codex operator, not a standalone browser robot. Keep the existing clipping/review/render/publishing behavior unchanged. The repository does not bundle Codex or guarantee browser-control capabilities on another installation.
 
 ## Execute setup
