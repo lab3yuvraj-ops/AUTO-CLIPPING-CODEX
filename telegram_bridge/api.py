@@ -1,5 +1,8 @@
 """Bot API transport. Never propagate httpx URLs (which contain the token)."""
 import time
+import ssl
+import sys
+from pathlib import Path
 import httpx
 
 
@@ -12,7 +15,9 @@ class TelegramError(Exception):
 class API:
     def __init__(self, token, client=None):
         self.base='https://api.telegram.org/bot'+token+'/'
-        self.client=client or httpx.Client(timeout=httpx.Timeout(70,connect=15),follow_redirects=False)
+        trust=Path(sys.executable).parent.parent/'ca.pem'
+        verify=ssl.create_default_context(cafile=str(trust)) if trust.is_file() else True
+        self.client=client or httpx.Client(timeout=httpx.Timeout(70,connect=15),follow_redirects=False,verify=verify)
 
     def call(self, method, data=None, files=None):
         try:
@@ -36,5 +41,5 @@ class API:
     def video(self, chat, path):
         with path.open('rb') as stream:
             return self.call('sendVideo',{'chat_id':chat,'supports_streaming':'true',
-                'caption':'Generated Reel preview. Not published to Instagram.'},
+                'caption':'This is the video.'},
                 {'video':('reel.mp4',stream,'video/mp4')})

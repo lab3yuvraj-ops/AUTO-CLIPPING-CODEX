@@ -4,6 +4,18 @@ Open your own clone as a project in Codex and say **onboarding**. Each student h
 
 Codex should perform the setup, not just display instructions: inspect the existing installation, open Chrome with supported browser/computer-use tools, guide your own account access, install missing dependencies and prepare models. Follow [browser-assisted onboarding](docs/BROWSER-ONBOARDING.md). Routine clicks can be handled by Codex. You may still need to sign in, complete 2FA/CAPTCHA, personally accept model-access terms/contact sharing, or approve a service/Windows permission. A clone cannot bypass those requirements or install browser-control tools automatically. Never send passwords or tokens in chat.
 
+## Telegram student checklist (current)
+
+Cloning downloads project code, fonts, CTA and configuration templates only. It does **not** install Python, FFmpeg, Node, packages, model weights, Codex authentication or private credentials. Open the clone in Codex and say **onboarding, including Telegram**. Codex checks existing setup and performs missing installation using this guide; the student completes required login, model terms, CAPTCHA/2FA or OS consent personally.
+
+1. Install/verify Git, Python 3.11, FFmpeg/ffprobe, Node and Codex with the student's own ChatGPT login. Run tools/setup_local.ps1 for CPU packages, and prepare the local speech models. Reuse a working installation.
+2. Create the student's own bot with Telegram @BotFather, and enter TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_USER_IDS (numeric sender IDs) in the clone's private .env. No secrets go into Telegram messages to the clipping bot. Instagram/Zernio is optional for clipping; a channel is optional for a supplied URL.
+3. Follow docs/TELEGRAM-RELAY.md to configure the complete official Codex CLI, optional transport dependencies and owned preview-only daemon. Start telegram_relay.py run --persistent. Press Start in the student's own bot. The PC must stay awake and online.
+4. Before calling setup ready, run reel.py doctor, confirm offline model loading with reel.py prepare-models, run telegram_relay.py doctor --persistent, and verify one harmless Telegram text round trip. These checks do not prove YouTube download access or a completed Reel. Do not start a full clipping test without a source request.
+5. Send a YouTube URL (one clip by default, or specify a count). Routine recovery is automatic and bounded. Normal clipping messages are only transcript complete, clips selected, editing, rendered, and the video attachment. Internal command/review chatter stays local. A genuine blocker, upload failure or material quality warning is still reported briefly; the bot must not hide failure or pretend a preview exists.
+
+The Telegram transport currently delivers previews only; it does not post to Instagram, even with configured credentials. Existing exact-preview publication approval rules remain mandatory for any separate supported publication flow.
+
 ## Reuse existing private setup first
 
 Before requesting credentials or installing anything, inspect THIS checkout's ignored `.env`, local `.venv`/explicit TELEGRAM_PYTHON_PATH, cached models and saved channel. Report presence/readiness only, never values. Existing valid configuration is reused. Do not search parent folders or copy a creator's/another student's keys, connections, approvals or jobs into a clone. Each student enters their own credentials once in the private local editor; not Telegram or public chat.
@@ -54,7 +66,7 @@ If YouTube challenges downloads, configure an authorized cookie-file path in `YO
 
 ## Everyday use
 
-Send a **YouTube URL** or say **YouTube analyze**. Codex asks how many clips you want, checks your saved channel, downloads/transcribes the source, reviews all of it, and chooses complete moments. If an additional clip is weaker, it explains why and asks before creating it. Tracking, full-height horizontal framing, smooth movement, locked Hinglish captions and the four-second CTA follow `AGENTS.md`.
+In desktop Codex, send a **YouTube URL** or say **YouTube analyze** and provide the clip count when asked. In Telegram, one clip is the default and explicit counts are honored without routine questions. A channel is needed only for channel triggers. Codex follows the current transcript-first selection and one-review policy, and reports honestly when too few strong moments exist. Tracking, full-height horizontal framing, smooth movement, locked Hinglish captions and the four-second CTA follow `AGENTS.md`.
 
 You receive the actual MP4 and the question **“Do you want to upload this video to Instagram?”** Clear approval of that exact preview authorizes publication. Codex polls the same Zernio request until it confirms a post ID/link. Saying no leaves the clip local. No dashboard, hosted worker or background schedule is created.
 

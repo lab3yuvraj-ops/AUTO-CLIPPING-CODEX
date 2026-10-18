@@ -35,7 +35,13 @@ the precise blocker and retained work without a question or an automatic endless
 Do not use interactive question tools requiring a desktop client. Missing required consent or
 credentials is a needs_action report, not permission to guess, bypass consent or request secrets.
 Use actual local media and inspection tools; never claim tool access or review without evidence.
-Give concise progress updates while working, including the problem, repair and resumed stage.
+For a clipping request emit only these exact standalone commentary milestones, once each and
+only after the relevant real work: 'Transcript is complete.', 'I\'ve selected the clips.',
+'I\'m editing the video.'. Do not narrate commands, downloads, retries, repairs or review details.
+The relay announces a validated render and delivers the video itself. Final success should include
+the actual MP4 path so it can be delivered, with only necessary unresolved quality warnings.
+If work cannot continue, return one concise honest blocker and required action; never hide failure.
+Ordinary non-clipping questions still receive a normal final answer, without streamed commentary.
 Read the latest transcript-first/single-pass rules before treating a visual warning as a blocker.
 For framing, select the relevant primary subject per shot or meaningful moment. Multiple visible
 people do not automatically form one required union box. When the story can be preserved by
@@ -76,6 +82,10 @@ def message_chunks(text,limit=3900):
             yield ''.join(part);part=[];size=0
         part.append(char);size+=units
     if part:yield ''.join(part)
+
+
+MILESTONES={text:text for text in (
+    'Transcript is complete.', "I've selected the clips.", "I'm editing the video.")}
 
 
 class Conversation:
@@ -122,7 +132,7 @@ class Conversation:
             if not self.ready.is_set() or self.failed.is_set():self.say(owner,'Codex is not connected. No instruction was accepted; check the local relay.');return
             item={'id':uuid.uuid4().hex,'owner':owner,'text':text,'at':time.time()}
             self.data['queue'].append(item);self.save()
-            self.say(owner,'Message received by Codex.' if not self.data.get('active') else 'Queued after the current Codex response.')
+            # No acknowledgement chatter: normal clipping sends milestones only.
     def rpc(self,method,params):
         self.rpc_id+=1;ident=self.rpc_id
         self.ws.send(json.dumps({'id':ident,'method':method,'params':params}))
@@ -171,6 +181,7 @@ class Conversation:
     def deliver_video(self,owner):
         # Only a hash-bound actual export under this project's jobs; no arbitrary path.
         jobs=(self.cfg.root/'workflow/jobs').resolve()
+        handled=False
         for p in jobs.glob('*/job.json'):
             try:
                 j=json.loads(p.read_text(encoding='utf-8'));path=Path(j.get('video','')).resolve()
@@ -180,13 +191,19 @@ class Conversation:
                 digest=hashlib.sha256(path.read_bytes()).hexdigest()
                 delivery_key=str(owner)+':'+digest
                 if digest!=j.get('render_sha256') or delivery_key in self.data.get('delivered_videos',[]):continue
+                handled=True
                 if path.stat().st_size>self.cfg.upload_bytes:
                     self.say(owner,'The completed preview exceeds Telegram’s configured upload limit. It remains available locally.');continue
                 self.data.setdefault('delivered_videos',[]).append(delivery_key);self.save() # at most one automatic attempt
                 from .api import TelegramError
+                if 'rendered' not in self.progress_seen:
+                    self.progress_seen.add('rendered');self.say(owner,'I have rendered the video.')
+                warnings=j.get('editorial_warnings',[])
+                if warnings:self.say(owner,'Review note: '+safe_text('; '.join(str(w) for w in warnings),self.secrets)[:1000])
                 try:self.api.video(owner,path)
                 except TelegramError:self.say(owner,'Video delivery was not confirmed. Check Telegram before requesting it again. The actual MP4 remains local.')
             except (OSError,ValueError,KeyError):continue
+        return handled
     def event(self,event):
         with self.lock:self._event(event)
 
@@ -204,10 +221,10 @@ class Conversation:
             item=params.get('item',{})
             if item.get('type')=='agentMessage' and item.get('text'):
                 if item.get('phase')=='commentary':
-                    # Completed assistant progress only; never stream raw commands or tool output.
-                    key=(active.get('turn'),item.get('id') or hashlib.sha256(item['text'].encode()).hexdigest())
-                    if key not in self.progress_seen:
-                        self.progress_seen.add(key);self.say(active['owner'],item['text'])
+                    # Exact allowlist, not keyword guessing: never forward internal narration.
+                    text=MILESTONES.get(item['text'].strip())
+                    if text and text not in self.progress_seen:
+                        self.progress_seen.add(text);self.say(active['owner'],text)
                 else:self.reply=item['text']
         if method=='turn/completed':
             turn=params.get('turn',{});status=turn.get('status')
@@ -217,9 +234,10 @@ class Conversation:
             # Clear active before sending a response; no automatic job rerun on upload errors.
             self.data['active']=None;self.save()
             if status=='completed' and self.reply:
-                sent=self.say(owner,self.reply)
-                self.data['last_delivery']={'turn':turn.get('id'),'telegram_reply_confirmed':sent,'text_sha256':hashlib.sha256(self.reply.encode()).hexdigest(),'at':time.time()};self.save()
-                self.deliver_video(owner)
+                preview_handled=self.deliver_video(owner)
+                sent=None if preview_handled else self.say(owner,self.reply)
+                self.data['last_delivery']={'turn':turn.get('id'),'telegram_reply_confirmed':sent,
+                    'preview_handled':preview_handled,'text_sha256':hashlib.sha256(self.reply.encode()).hexdigest(),'at':time.time()};self.save()
             else:self.say(owner,'Codex stopped before completing this response. Check the local conversation; no automatic rerun.')
     def run(self):
         from telegram_relay import control_connection

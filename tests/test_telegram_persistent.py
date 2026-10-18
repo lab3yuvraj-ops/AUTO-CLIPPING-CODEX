@@ -17,7 +17,7 @@ def test_messages_are_verbatim_queued_once_for_shared_conversation(tmp_path):
     c,api=controller(tmp_path);text='Hello\nclip this URL'
     c.handle(message(1,text));c.handle(message(1,text));c.handle(message(2,'Other user',43));c.handle(message(3,'Not allowed',99))
     assert [x['text'] for x in c.data['queue']]==[text,'Other user']
-    assert [x[0] for x in api.messages]==[42,43]
+    assert api.messages==[]
     assert c.data['thread']=='new-persistent-thread'
 def test_questions_return_to_initiator_without_tool_output_broadcast(tmp_path):
     c,api=controller(tmp_path);c.data['active']={'owner':43,'turn':'turn-1'}
@@ -85,7 +85,7 @@ def test_progress_is_private_redacted_deduplicated_and_not_final(tmp_path):
     c.event(progress);c.event(progress)
     c.event({'method':'item/completed','params':{'threadId':'another-thread',
         'item':{'type':'agentMessage','phase':'commentary','text':'unrelated'}}})
-    assert api.messages==[(43,'Repairing [redacted]; resuming saved stage.')]
+    assert api.messages==[]
     assert c.reply=='' and c.data['active']
 
 
@@ -126,7 +126,7 @@ def test_notification_failure_does_not_abort_codex_or_claim_delivery(tmp_path):
     def fail(*args):raise TelegramError(429,7)
     api.text=fail
     c.event({'method':'item/completed','params':{'threadId':c.data['thread'],
-        'item':{'type':'agentMessage','phase':'commentary','text':'Continuing local repair'}}})
+        'item':{'type':'agentMessage','phase':'commentary','text':'Transcript is complete.'}}})
     assert c.data['active'] and not c.failed.is_set()
     c.reply='Done'
     c.event({'method':'turn/completed','params':{'threadId':c.data['thread'],
@@ -144,3 +144,26 @@ def test_unicode_progress_chunks_preserve_text_and_telegram_limits():
     chunks=list(message_chunks(text))
     assert ''.join(chunks)==text and len(chunks)>1
     assert all(len(c.encode('utf-16-le'))//2<=3900 for c in chunks)
+
+
+def test_only_exact_milestones_are_forwarded_once_to_initiator(tmp_path):
+    c,api=controller(tmp_path);c.data['active']={'owner':43,'turn':'turn-1'}
+    for text in ['Downloading source', 'Transcript is complete.', 'Transcript is complete.',
+                 "I've selected the clips.", "I'm editing the video.",
+                 'I have rendered the video.', 'Transcript is complete. Running tests next.']:
+        c.event({'method':'item/completed','params':{'threadId':c.data['thread'],
+            'item':{'type':'agentMessage','phase':'commentary','text':text}}})
+    assert api.messages==[(43,'Transcript is complete.'),(43,"I've selected the clips."),(43,"I'm editing the video.")]
+
+
+def test_success_only_announces_validated_render_and_delivers_preview(tmp_path):
+    import hashlib
+    c,api=controller(tmp_path);folder=tmp_path/'workflow/jobs/fresh-clip';folder.mkdir(parents=True)
+    video=folder/'reel.mp4';video.write_bytes(b'fixture')
+    (folder/'job.json').write_text(json.dumps({'video':str(video),'status':'Needs approval',
+        'checks':[{'status':'pass'}],'render_sha256':hashlib.sha256(video.read_bytes()).hexdigest()}))
+    c.data['active']={'owner':42,'turn':'turn-1'};c.reply='Internal details '+str(video)
+    c.event({'method':'turn/completed','params':{'threadId':c.data['thread'],
+        'turn':{'id':'turn-1','status':'completed'}}})
+    assert api.messages==[(42,'I have rendered the video.')]
+    assert len(api.videos)==1 and c.data['last_delivery']['preview_handled']
